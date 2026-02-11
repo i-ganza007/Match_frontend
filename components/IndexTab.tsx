@@ -1,9 +1,12 @@
-import { View,Text, StyleSheet, Dimensions,Link } from 'react-native';
+import { View,Text, StyleSheet, Dimensions } from 'react-native';
 import { Button } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import React from 'react'
 const { width } = Dimensions.get('window');
 
 export default function IndexTab(){
+    const router = useRouter();
     return (
         <View style={styles.glassContainer}>
             {/* Glass effect overlay */}
@@ -22,7 +25,7 @@ export default function IndexTab(){
                 <View style={styles.buttonSection}>
                     <Button 
                         mode="contained" 
-                        onPress={() => console.log('Pressed')} 
+                        onPress={() => router.push('/(tabs)/home')} 
                         style={styles.primaryButton} 
                         buttonColor="#1C5F20" 
                         textColor="#FFFFFF"
