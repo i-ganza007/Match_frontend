@@ -1,10 +1,15 @@
+<<<<<<< Updated upstream
 import { View,Text, StyleSheet, Dimensions } from 'react-native';
+=======
+import { View, Text, StyleSheet, Dimensions, Link } from 'react-native';
+>>>>>>> Stashed changes
 import { Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import React from 'react'
 const { width } = Dimensions.get('window');
 
+<<<<<<< Updated upstream
 export default function IndexTab(){
     const router = useRouter();
     return (
@@ -47,8 +52,53 @@ export default function IndexTab(){
                     </Button>
                 </View>
             </View>
+=======
+export default function IndexTab() {
+  return (
+    <View style={styles.glassContainer}>
+      {/* Glass effect overlay */}
+      <View style={styles.glassOverlay} />
+
+      {/* Content */}
+      <View style={styles.contentWrapper}>
+        <View style={styles.headerSection}>
+          <Text style={styles.title}>Empowering Growth</Text>
+>>>>>>> Stashed changes
         </View>
-    )
+
+        <View style={styles.contentSection}>
+          <Text style={styles.subtitle}>Premium livestock genetic matching for Rwanda's dedicated smallholder farmers.</Text>
+        </View>
+
+        <View style={styles.buttonSection}>
+          <Link href="/signup" asChild>
+            <Button
+              mode="contained"
+              style={styles.primaryButton}
+              buttonColor="#1C5F20"
+              textColor="#FFFFFF"
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonText}
+            >
+              Get Started
+              <AntDesign name="arrow-right" size={14} style={{ marginLeft: 10 }} color="white" />
+            </Button>
+          </Link>
+          <Link href="/login" asChild>
+            <Button
+              mode="outlined"
+              style={styles.secondaryButton}
+              textColor="#FFFFFF"
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonText}
+            >
+              Login to Account
+            </Button>
+          </Link>
+        </View>
+      </View>
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -60,7 +110,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     // Glass border
-    paddingVertical:30,
+    paddingVertical: 30,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
@@ -136,7 +186,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     fontWeight: '600',
-    
+
   },
   secondaryButton: {
     width: '90%',
