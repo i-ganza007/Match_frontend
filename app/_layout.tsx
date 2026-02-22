@@ -6,7 +6,7 @@ import CustomSplashScreen from '../components/SplashScreen';
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout(){
+export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -36,7 +36,9 @@ export default function RootLayout(){
 
   return (
     <Stack>
-      <Stack.Screen name="(tabs)" options={{headerShown:false}}/>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="signup" options={{ headerShown: false }} />
     </Stack>
   )
 }

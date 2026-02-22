@@ -1,6 +1,7 @@
 import { View, Text, Image } from 'react-native'
 import { StyleSheet } from 'react-native'
 import IndexTab from '@/components/IndexTab'
+import React from 'react'
 export default function Index(){
   return (
     <View style={styles.container}>
