@@ -5,20 +5,33 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue, withDelay } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { useTheme } from '../../context/ThemeContext';
+import { ThemeToggle } from '../../components/ThemeToggle';
 
 const { width } = Dimensions.get('window');
 
 // --- Components ---
 
-const GlassView = ({ children, style, bright = false }: { children: React.ReactNode, style?: any, bright?: boolean }) => (
-    <View style={[
-        styles.glass,
-        bright && styles.glassBright,
-        style
-    ]}>
-        {children}
-    </View>
-);
+const GlassView = ({ children, style, bright = false }: { children: React.ReactNode, style?: any, bright?: boolean }) => {
+    const { colors, isDark } = useTheme();
+    return (
+        <View style={[
+            styles.glass,
+            {
+                backgroundColor: bright
+                    ? (isDark ? 'rgba(17, 212, 30, 0.15)' : 'rgba(17, 212, 30, 0.2)')
+                    : colors.glassBackground,
+                borderColor: bright
+                    ? (isDark ? 'rgba(17, 212, 30, 0.3)' : 'rgba(17, 212, 30, 0.4)')
+                    : colors.glassBorder,
+                borderWidth: 1,
+            },
+            style
+        ]}>
+            {children}
+        </View>
+    );
+};
 
 const PulseMarker = ({ delay = 0, size = 32 }: { delay?: number, size?: number }) => {
     const scale = useSharedValue(1);
@@ -44,20 +57,21 @@ const PulseMarker = ({ delay = 0, size = 32 }: { delay?: number, size?: number }
 
 export default function Home() {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                 {/* 1. Top Bar */}
                 <View style={styles.header}>
                     <GlassView style={styles.searchBar} bright={true}>
-                        <MaterialIcons name="search" size={20} color="rgba(255,255,255,0.5)" />
+                        <MaterialIcons name="search" size={20} color={colors.icon} />
                         <TextInput
-                            style={styles.searchInput}
+                            style={[styles.searchInput, { color: colors.text }]}
                             placeholder="Search breeds, farmers..."
-                            placeholderTextColor="rgba(255,255,255,0.3)"
+                            placeholderTextColor={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"}
                         />
-                        <MaterialIcons name="mic" size={20} color="rgba(17, 212, 30, 0.8)" />
+                        <ThemeToggle size={20} showGlass={false} />
                     </GlassView>
                     <GlassView style={styles.langToggle}>
                         <View style={styles.langBtnActive}>
@@ -111,8 +125,8 @@ export default function Home() {
                                 <View style={styles.featuredInfo}>
                                     <View style={styles.featuredRow}>
                                         <View>
-                                            <Text style={styles.featuredTitle}>Amavubi Genetics</Text>
-                                            <Text style={styles.featuredSubtitle}>Holstein-Friesian • Musanze, RW</Text>
+                                            <Text style={[styles.featuredTitle, { color: colors.text }]}>Amavubi Genetics</Text>
+                                            <Text style={[styles.featuredSubtitle, { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }]}>Holstein-Friesian • Musanze, RW</Text>
                                         </View>
                                         <View style={styles.matchBadge}>
                                             <Text style={styles.matchScore}>98% MATCH</Text>
@@ -213,7 +227,7 @@ export default function Home() {
                                     <Text style={styles.networkCountText}>2</Text>
                                 </View>
                             </View>
-                            <Text style={styles.networkName}>K. Gasana</Text>
+                            <Text style={[styles.networkName, { color: colors.text }]}>K. Gasana</Text>
                         </View>
 
                         <View style={styles.networkItem}>
@@ -228,7 +242,7 @@ export default function Home() {
                                     <MaterialCommunityIcons name="egg-outline" size={10} color="#11d41e" />
                                 </GlassView>
                             </View>
-                            <Text style={styles.networkName}>M. Umurerwa</Text>
+                            <Text style={[styles.networkName, { color: colors.text }]}>M. Umurerwa</Text>
                         </View>
 
                         <View style={styles.networkItem}>
@@ -243,7 +257,7 @@ export default function Home() {
                                     <MaterialCommunityIcons name="grass" size={10} color="#11d41e" />
                                 </GlassView>
                             </View>
-                            <Text style={styles.networkName}>E. Nshuti</Text>
+                            <Text style={[styles.networkName, { color: colors.text }]}>E. Nshuti</Text>
                         </View>
 
                         <View style={styles.networkItem}>
@@ -273,22 +287,22 @@ export default function Home() {
 
             {/* Bottom Navigation */}
             <View style={styles.navContainer}>
-                <GlassView style={styles.navBar}>
+                <GlassView style={[styles.navBar, { backgroundColor: colors.glassBackground, borderColor: colors.glassBorder }]}>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialIcons name="home" size={24} color="#11d41e" />
-                        <Text style={styles.navTextActive}>HOME</Text>
+                        <MaterialIcons name="home" size={24} color={colors.primaryGreen} />
+                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>HOME</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialIcons name="hub" size={24} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.navText}>GENETICS</Text>
+                        <MaterialIcons name="hub" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>GENETICS</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/messages')}>
+                        <MaterialIcons name="chat-bubble-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>CHAT</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialIcons name="chat-bubble-outline" size={24} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.navText}>CHAT</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navItem}>
-                        <MaterialIcons name="person-outline" size={24} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.navText}>PROFILE</Text>
+                        <MaterialIcons name="person-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>PROFILE</Text>
                     </TouchableOpacity>
                 </GlassView>
             </View>
@@ -306,14 +320,9 @@ const styles = StyleSheet.create({
         paddingBottom: 20,
     },
     glass: {
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        borderWidth: 1,
         borderRadius: 16,
     },
     glassBright: {
-        backgroundColor: 'rgba(17, 212, 30, 0.08)',
-        borderColor: 'rgba(17, 212, 30, 0.2)',
     },
     header: {
         flexDirection: 'row',
