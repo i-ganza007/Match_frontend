@@ -287,7 +287,7 @@ export default function Home() {
 
             {/* Bottom Navigation */}
             <View style={styles.navContainer}>
-                <GlassView style={[styles.navBar, { backgroundColor: colors.glassBackground, borderColor: colors.glassBorder }]}>
+                <View style={[styles.navBar, { backgroundColor: '#081209', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="home" size={24} color={colors.primaryGreen} />
                         <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>HOME</Text>
@@ -304,9 +304,8 @@ export default function Home() {
                         <MaterialIcons name="person-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
                         <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>PROFILE</Text>
                     </TouchableOpacity>
-                </GlassView>
+                </View>
             </View>
-
         </SafeAreaView>
     );
 }

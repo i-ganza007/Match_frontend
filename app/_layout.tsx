@@ -39,6 +39,10 @@ export default function RootLayout() {
     <ThemeProvider>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="scanning/analysis" options={{ headerShown: false }} />
+        <Stack.Screen name="scanning/result" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="conversation/[id]" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>

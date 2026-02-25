@@ -11,13 +11,14 @@ interface CustomSplashScreenProps {
 export default function CustomSplashScreen({ onFinish }: CustomSplashScreenProps) {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.8));
+  const [progressAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
-    // Start animations
+    // Start parallel animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 2000,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
@@ -25,6 +26,11 @@ export default function CustomSplashScreen({ onFinish }: CustomSplashScreenProps
         tension: 50,
         friction: 7,
         useNativeDriver: true,
+      }),
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: false,
       }),
     ]).start();
 
@@ -53,25 +59,25 @@ export default function CustomSplashScreen({ onFinish }: CustomSplashScreenProps
           },
         ]}
       >
-        <Image 
-          source={require('../assets/images/splash-icon.png')} 
+        <Image
+          source={require('../assets/images/splash-icon.png')}
           style={styles.logo}
           resizeMode="contain"
         />
-        
+
         {/* Loading indicator */}
         <View style={styles.loadingContainer}>
           <View style={styles.loadingBar}>
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.loadingProgress,
                 {
-                  width: fadeAnim.interpolate({
+                  width: progressAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: ['0%', '100%'],
                   }),
                 },
-              ]} 
+              ]}
             />
           </View>
         </View>
