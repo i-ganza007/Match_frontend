@@ -8,7 +8,7 @@ import { useTensorflowModel } from 'react-native-fast-tflite';
 
 const MODEL_FILENAME = 'livestock_mobile_vnet_final.tflite';
 
-export const preprocessImageForMobileNet = async (imageUri: string): Promise<Float32Array> => {
+export const preprocessImageForMobileNet = async (imageUri: string): Promise<Uint8Array> => {
   console.log('Preprocessing image for MobileNetV2 (224x224)...');
 
   try {
@@ -41,29 +41,19 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
       throw new Error(`Invalid pixel data: expected ${224*224*4} bytes, got ${pixels?.length || 0}`);
     }
 
-    // 4. MobileNetV2 preprocessing: scale to [-1, 1] range
-    // Create 4D tensor: [1, 224, 224, 3] (batch, height, width, channels)
-    const batchSize = 1;
-    const height = 224;
-    const width = 224;
-    const channels = 3;
-    
-    const inputTensor = new Float32Array(batchSize * height * width * channels);
+    // 4. Model input - try uint8 [0-255] instead of float32 [-1,1]
+    const inputTensor = new Uint8Array(224 * 224 * 3);
     let idx = 0;
 
     for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      // Scale from [0, 255] to [-1, 1]
-      inputTensor[idx++] = (r / 127.5) - 1.0;
-      inputTensor[idx++] = (g / 127.5) - 1.0;
-      inputTensor[idx++] = (b / 127.5) - 1.0;
+      inputTensor[idx++] = pixels[i];     // R
+      inputTensor[idx++] = pixels[i + 1]; // G
+      inputTensor[idx++] = pixels[i + 2]; // B
     }
 
     skiaImage.dispose();
 
-    console.log(`✅ Preprocessing COMPLETE → Float32Array[${inputTensor.length}] ready`);
+    console.log(`✅ Preprocessing COMPLETE → Uint8Array[${inputTensor.length}] ready`);
     return inputTensor;
 
   } catch (error) {
@@ -189,9 +179,7 @@ export const useMLModel = (modelRequire: any) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const inputTensor = await preprocessImageForMobileNet(imageUri);
-        console.log(`📦 Input tensor length: ${inputTensor.length}`);
         
-        // Model expects [1, 224, 224, 3] shape
         const outputs = await tflite.model.run([inputTensor]);
         const logits = outputs[0] as Float32Array;
 
