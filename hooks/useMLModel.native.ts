@@ -8,8 +8,8 @@ import { useTensorflowModel } from 'react-native-fast-tflite';
 
 const MODEL_FILENAME = 'livestock_mobile_vnet_final.tflite';
 
-export const preprocessImageForResNet50INT8 = async (imageUri: string): Promise<Int8Array> => {
-  console.log('Preprocessing image for INT8 quantized ResNet50 (224x224)...');
+export const preprocessImageForMobileNet = async (imageUri: string): Promise<Float32Array> => {
+  console.log('Preprocessing image for MobileNetV2 (224x224)...');
 
   try {
     // 1. Resize to exact model input size
@@ -37,28 +37,21 @@ export const preprocessImageForResNet50INT8 = async (imageUri: string): Promise<
       alphaType: 'unpremul' as any,
     }) as Uint8Array;
 
-    // 4. Convert to INT8 tensor with ImageNet normalization
-    // INT8 quantized models expect values in range [-128, 127]
-    const tensor = new Int8Array(224 * 224 * 3);
+    // 4. MobileNetV2 preprocessing: scale to [-1, 1] range
+    // This matches tf.keras.applications.mobilenet_v2.preprocess_input
+    const tensor = new Float32Array(224 * 224 * 3);
     let idx = 0;
 
-    const mean = [0.485 * 255, 0.456 * 255, 0.406 * 255]; // [123.675, 116.28, 103.53]
-    const std = [0.229 * 255, 0.224 * 255, 0.225 * 255];   // [58.395, 57.12, 57.375]
-
     for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-
-      // Normalize and quantize to INT8 range [-128, 127]
-      tensor[idx++] = Math.round(((r - mean[0]) / std[0]) * 128);
-      tensor[idx++] = Math.round(((g - mean[1]) / std[1]) * 128);
-      tensor[idx++] = Math.round(((b - mean[2]) / std[2]) * 128);
+      // Scale from [0, 255] to [-1, 1]
+      tensor[idx++] = (pixels[i] / 127.5) - 1.0;     // R
+      tensor[idx++] = (pixels[i + 1] / 127.5) - 1.0; // G
+      tensor[idx++] = (pixels[i + 2] / 127.5) - 1.0; // B
     }
 
     skiaImage.dispose();
 
-    console.log('✅ INT8 Preprocessing COMPLETE → Int8Array ready (224×224×3)');
+    console.log('✅ Preprocessing COMPLETE → Float32Array ready (224×224×3)');
     return tensor;
 
   } catch (error) {
@@ -161,8 +154,8 @@ export const useMLModel = (modelRequire: any) => {
     }
   }, [tflite.state, localUri]);
 
-  // 4. Inference with retry (INT8 quantized model)
-  const runInferenceWithRetry = async (imageUri: string, maxRetries = 3): Promise<Int8Array> => {
+  // 4. Inference with retry (MobileNetV2 uses Float32)
+  const runInferenceWithRetry = async (imageUri: string, maxRetries = 3): Promise<Float32Array> => {
     if (!localUri) {
       throw new Error('Model file not prepared yet');
     }
@@ -173,9 +166,9 @@ export const useMLModel = (modelRequire: any) => {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const inputTensor = await preprocessImageForResNet50INT8(imageUri);
+        const inputTensor = await preprocessImageForMobileNet(imageUri);
         const outputs = await tflite.model.run([inputTensor]);
-        const logits = outputs[0] as Int8Array;
+        const logits = outputs[0] as Float32Array;
 
         console.log(`✅ Inference SUCCESS (attempt ${attempt})`);
         return logits;

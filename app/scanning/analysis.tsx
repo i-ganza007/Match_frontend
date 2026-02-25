@@ -145,20 +145,20 @@ export default function AnalysisScreen() {
             progress.value = withTiming(0.7, { duration: 400 });
             setProgressText('70');
             
-            // Use enhanced inference with INT8 quantized model
+            // Use inference with Float32 (MobileNetV2)
             const logits = await runInferenceWithRetry(imageUri);
             
             if (!logits || logits.length === 0) {
                 throw new Error('Invalid inference result: empty logits array');
             }
             
-            // Convert INT8 logits to regular numbers and find max
+            // Find max probability
             const logitsArray = Array.from(logits).map(v => Number(v));
             const maxValue = Math.max(...logitsArray);
             const maxIndex = logitsArray.indexOf(maxValue);
             
-            // Dequantize INT8 output to get confidence (approximate)
-            const confidence = Math.min(100, Math.max(0, ((maxValue + 128) / 255) * 100));
+            // Convert to confidence percentage
+            const confidence = Math.min(100, Math.max(0, maxValue * 100));
             
             const breedName = LABELS[maxIndex].split('_').map(w => 
                 w.charAt(0).toUpperCase() + w.slice(1)
@@ -191,11 +191,19 @@ export default function AnalysisScreen() {
             setStatus('Using Fallback Analysis...');
             setProgressText('99');
             
+            // Show which error caused fallback
+            const errorMsg = e.message || 'Unknown error';
+            console.log('🚨 FALLBACK REASON:', errorMsg);
+            
             setTimeout(() => {
                 console.log('🎯 Fallback Result:', selectedBreed, confidence + '%');
                 router.replace({
                     pathname: '/scanning/result',
-                    params: { breed: selectedBreed, confidence, image: imageUri || '' }
+                    params: { 
+                        breed: selectedBreed + ' (Fallback: ' + errorMsg.substring(0, 20) + ')', 
+                        confidence, 
+                        image: imageUri || '' 
+                    }
                 } as any);
             }, 1000);
         }
