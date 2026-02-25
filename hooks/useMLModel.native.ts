@@ -77,7 +77,7 @@ export const useMLModel = (modelRequire: any) => {
   // Stable file:// path – same in dev and production
   const destinationUri = FileSystem.documentDirectory + MODEL_FILENAME;
 
-  // 1. Copy model to documentDirectory FIRST, before initializing TFLite
+  // 1. Load asset and get its URI directly (skip file check to avoid crash)
   useEffect(() => {
     let cancelled = false;
     const prepareModel = async () => {
@@ -94,23 +94,11 @@ export const useMLModel = (modelRequire: any) => {
         
         console.log('✅ Step 1: Model require is valid');
         
-        // Check if model already exists in documentDirectory
-        console.log('🔍 Step 2: Checking if model exists at:', destinationUri);
-        const fileInfo = await FileSystem.getInfoAsync(destinationUri);
-        console.log('📊 File info:', JSON.stringify(fileInfo));
-        
-        if (fileInfo.exists) {
-          console.log('✅ Model already exists, skipping download');
-          setLocalUri(destinationUri);
-          setIsPreparing(false);
-          return;
-        }
-        
-        console.log('📥 Step 3: Model not found, loading asset...');
+        console.log('📥 Step 2: Loading asset directly...');
         const asset = Asset.fromModule(modelRequire);
         console.log('✅ Asset created:', asset.name);
         
-        console.log('⬇️ Step 4: Downloading asset...');
+        console.log('⬇️ Step 3: Downloading asset...');
         await asset.downloadAsync();
         console.log('✅ Asset downloaded');
 
@@ -119,7 +107,6 @@ export const useMLModel = (modelRequire: any) => {
           : asset.uri;
 
         console.log('📍 Source URI:', fromUri);
-        console.log('📍 Destination URI:', destinationUri);
 
         if (!fromUri) {
           const err = 'Asset has no URI after download';
@@ -131,26 +118,20 @@ export const useMLModel = (modelRequire: any) => {
 
         if (cancelled) return;
 
-        // Copy/download to stable file:// location
+        // Use the asset URI directly if it's already a file:// path
         if (fromUri.startsWith('file://')) {
-          console.log('📋 Step 5: Copying model file...');
-          await FileSystem.copyAsync({ from: fromUri, to: destinationUri });
-          console.log('✅ Copy complete');
+          console.log('✅ Using asset file directly:', fromUri);
+          setLocalUri(fromUri);
+          setIsPreparing(false);
         } else {
-          console.log('⬇️ Step 5: Downloading model file from HTTP...');
-          await FileSystem.downloadAsync(fromUri, destinationUri);
-          console.log('✅ Download complete');
+          console.log('❌ Asset is not a file:// URI, cannot use:', fromUri);
+          setPreparationError('Asset must be a file:// URI');
+          setIsPreparing(false);
         }
-
-        if (cancelled) return;
-        
-        console.log('✅ Model file ready at:', destinationUri);
-        setLocalUri(destinationUri);
-        setIsPreparing(false);
       } catch (err: any) {
         if (!cancelled) {
           const msg = err?.message ?? String(err);
-          console.error('❌ Model preparation FAILED at:', msg);
+          console.error('❌ Model preparation FAILED:', msg);
           console.error('❌ Error stack:', err?.stack);
           setPreparationError(msg);
           setIsPreparing(false);
