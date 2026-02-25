@@ -3,63 +3,48 @@ import { useState, useEffect, useMemo } from 'react';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Skia } from '@shopify/react-native-skia';
+import { Skia, ColorType, AlphaType } from '@shopify/react-native-skia';
 import { useTensorflowModel } from 'react-native-fast-tflite';
 
 const MODEL_FILENAME = 'livestock_mobile_vnet_final.tflite';
 
-export const preprocessImageForMobileNet = async (imageUri: string): Promise<Uint8Array> => {
+export const preprocessImageForMobileNet = async (imageUri: string): Promise<Float32Array> => {
   console.log('Preprocessing image for MobileNetV2 (224x224)...');
 
-  try {
-    // 1. Resize to exact model input size
-    const manipulated = await ImageManipulator.manipulateAsync(
-      imageUri,
-      [{ resize: { width: 224, height: 224 } }],
-      { format: ImageManipulator.SaveFormat.JPEG, compress: 0.9 }
-    );
+  const manipulated = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: 224, height: 224 } }],
+    { format: ImageManipulator.SaveFormat.JPEG, compress: 0.9 }
+  );
 
-    // 2. Load as base64 → Skia
-    const buffer = await FileSystem.readAsStringAsync(manipulated.uri, {
-      encoding: 'base64',
-    } as any);
+  const buffer = await FileSystem.readAsStringAsync(manipulated.uri, { encoding: 'base64' });
+  const data = Skia.Data.fromBase64(buffer);
+  const skiaImage = Skia.Image.MakeImageFromEncoded(data);
+  if (!skiaImage) throw new Error('Failed to decode image with Skia');
 
-    const data = Skia.Data.fromBase64(buffer);
-    const skiaImage = Skia.Image.MakeImageFromEncoded(data);
+  const pixels = skiaImage.readPixels(0, 0, {
+    width: 224,
+    height: 224,
+    colorType: ColorType.RGBA_8888,
+    alphaType: AlphaType.Opaque,
+  }) as Uint8Array;
 
-    if (!skiaImage) throw new Error('Failed to decode image with Skia');
-
-    // 3. Read RGBA pixels explicitly (Android-safe)
-    const pixels = skiaImage.readPixels(0, 0, {
-      width: 224,
-      height: 224,
-      colorType: 'rgba8888' as any,  // Explicit RGBA order
-      alphaType: 'unpremul' as any,
-    }) as Uint8Array;
-
-    if (!pixels || pixels.length !== 224 * 224 * 4) {
-      throw new Error(`Invalid pixel data: expected ${224*224*4} bytes, got ${pixels?.length || 0}`);
-    }
-
-    // 4. Model input - try uint8 [0-255] instead of float32 [-1,1]
-    const inputTensor = new Uint8Array(224 * 224 * 3);
-    let idx = 0;
-
-    for (let i = 0; i < pixels.length; i += 4) {
-      inputTensor[idx++] = pixels[i];     // R
-      inputTensor[idx++] = pixels[i + 1]; // G
-      inputTensor[idx++] = pixels[i + 2]; // B
-    }
-
-    skiaImage.dispose();
-
-    console.log(`✅ Preprocessing COMPLETE → Uint8Array[${inputTensor.length}] ready`);
-    return inputTensor;
-
-  } catch (error) {
-    console.error('Preprocessing failed:', error);
-    throw error;
+  if (!pixels || pixels.length !== 224 * 224 * 4) {
+    throw new Error(`Invalid pixel data: expected ${224*224*4} bytes, got ${pixels?.length || 0}`);
   }
+
+  const inputTensor = new Float32Array(224 * 224 * 3);
+  let idx = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    inputTensor[idx++] = (pixels[i] / 127.5) - 1.0;
+    inputTensor[idx++] = (pixels[i + 1] / 127.5) - 1.0;
+    inputTensor[idx++] = (pixels[i + 2] / 127.5) - 1.0;
+  }
+
+  skiaImage.dispose();
+
+  console.log(`✅ Preprocessing COMPLETE → Float32Array[${inputTensor.length}] ready`);
+  return inputTensor;
 };
 
 
