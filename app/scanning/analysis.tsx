@@ -43,7 +43,7 @@ const GlassBadge = ({ children, style }: { children: React.ReactNode, style?: an
 );
 
 // Single require so Metro bundles the asset; path works in dev and production
-const MODEL_ASSET = require('../../assets/models/livestock_resnet50_int8.tflite');
+const MODEL_ASSET = require('../../assets/models/livestock_mobile_vnet_final.tflite');
 
 export default function AnalysisScreen() {
     const router = useRouter();

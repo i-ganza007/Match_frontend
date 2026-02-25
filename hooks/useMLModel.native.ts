@@ -6,7 +6,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Skia } from '@shopify/react-native-skia';
 import { useTensorflowModel } from 'react-native-fast-tflite';
 
-const MODEL_FILENAME = 'livestock_resnet50_int8.tflite';
+const MODEL_FILENAME = 'livestock_mobile_vnet_final.tflite';
 
 export const preprocessImageForResNet50INT8 = async (imageUri: string): Promise<Int8Array> => {
   console.log('Preprocessing image for INT8 quantized ResNet50 (224x224)...');
