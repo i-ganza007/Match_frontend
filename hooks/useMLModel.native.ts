@@ -42,11 +42,16 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
     }
 
     // 4. MobileNetV2 preprocessing: scale to [-1, 1] range
-    // NHWC layout: batch=1, height=224, width=224, channels=3
-    const inputTensor = new Float32Array(224 * 224 * 3);
+    // Create 4D tensor: [1, 224, 224, 3] (batch, height, width, channels)
+    const batchSize = 1;
+    const height = 224;
+    const width = 224;
+    const channels = 3;
+    
+    const inputTensor = new Float32Array(batchSize * height * width * channels);
     let idx = 0;
 
-    for (let i = 0; i < pixels.length; i += 4) {  // Skip alpha channel
+    for (let i = 0; i < pixels.length; i += 4) {
       const r = pixels[i];
       const g = pixels[i + 1];
       const b = pixels[i + 2];
@@ -172,13 +177,26 @@ export const useMLModel = (modelRequire: any) => {
     }
     if (!imageUri) throw new Error('❌ No image provided');
 
+    // Log model input/output details
+    try {
+      console.log('📊 MODEL DETAILS:');
+      console.log('  Inputs:', JSON.stringify(tflite.model.inputs));
+      console.log('  Outputs:', JSON.stringify(tflite.model.outputs));
+    } catch (e) {
+      console.log('⚠️ Could not log model details');
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const inputTensor = await preprocessImageForMobileNet(imageUri);
+        console.log(`📦 Input tensor length: ${inputTensor.length}`);
+        
+        // Model expects [1, 224, 224, 3] shape
         const outputs = await tflite.model.run([inputTensor]);
         const logits = outputs[0] as Float32Array;
 
         console.log(`✅ Inference SUCCESS (attempt ${attempt})`);
+        console.log(`📊 Output length: ${logits.length}`);
         return logits;
       } catch (error: any) {
         console.error(`❌ Attempt ${attempt} failed:`, error.message);

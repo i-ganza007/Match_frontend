@@ -54,6 +54,7 @@ export default function AnalysisScreen() {
     const [progressText, setProgressText] = useState('0');
     const [hasStarted, setHasStarted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [debugInfo, setDebugInfo] = useState<string>('');
 
     // Optional web-only error boundary (React Native has no window)
     React.useEffect(() => {
@@ -101,6 +102,8 @@ export default function AnalysisScreen() {
     const { runInferenceWithRetry, state, isReady, preparationError } = useMLModel(MODEL_ASSET);
 
     useEffect(() => {
+        const info = `Model: ${state} | Ready: ${isReady} | Error: ${preparationError || 'none'}`;
+        setDebugInfo(info);
         console.log('📊 Model Status:', state);
         console.log('📦 Model available:', state === 'loaded');
         console.log('🚀 Model fully ready:', isReady);
@@ -182,6 +185,9 @@ export default function AnalysisScreen() {
             console.log('🔄 Falling back to simulation...');
             console.log('Error details:', e.message);
             console.log('Error stack:', e.stack);
+            
+            setDebugInfo(`ERROR: ${e.message}`);
+            setStatus('Error: ' + e.message.substring(0, 30));
             
             // Fallback to simulation if TFLite fails
             const breeds = ['Sahiwal Cow', 'Jersey Cow', 'Fresian Cow', 'Indigenous Ankole Cow'];
@@ -393,6 +399,13 @@ export default function AnalysisScreen() {
                 </View>
 
                 <Text style={styles.processingText}>PROBING KIGALI_GENOMIC_NODE</Text>
+                
+                {/* Debug Info Display */}
+                <View style={{ marginTop: 20, padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8 }}>
+                    <Text style={{ color: '#11d41e', fontSize: 10, fontFamily: 'monospace' }}>
+                        {debugInfo}
+                    </Text>
+                </View>
             </View>
 
             {/* Bottom Progress UI */}
