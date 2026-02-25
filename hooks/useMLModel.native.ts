@@ -16,7 +16,7 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
     const manipulated = await ImageManipulator.manipulateAsync(
       imageUri,
       [{ resize: { width: 224, height: 224 } }],
-      { format: ImageManipulator.SaveFormat.PNG, compress: 1 }
+      { format: ImageManipulator.SaveFormat.JPEG, compress: 0.9 }
     );
 
     // 2. Load as base64 → Skia
@@ -29,30 +29,37 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
 
     if (!skiaImage) throw new Error('Failed to decode image with Skia');
 
-    // 3. Read RGBA pixels
+    // 3. Read RGBA pixels explicitly (Android-safe)
     const pixels = skiaImage.readPixels(0, 0, {
       width: 224,
       height: 224,
-      colorType: 'rgba8888' as any,
+      colorType: 'rgba8888' as any,  // Explicit RGBA order
       alphaType: 'unpremul' as any,
     }) as Uint8Array;
 
+    if (!pixels || pixels.length !== 224 * 224 * 4) {
+      throw new Error(`Invalid pixel data: expected ${224*224*4} bytes, got ${pixels?.length || 0}`);
+    }
+
     // 4. MobileNetV2 preprocessing: scale to [-1, 1] range
-    // This matches tf.keras.applications.mobilenet_v2.preprocess_input
-    const tensor = new Float32Array(224 * 224 * 3);
+    // NHWC layout: batch=1, height=224, width=224, channels=3
+    const inputTensor = new Float32Array(224 * 224 * 3);
     let idx = 0;
 
-    for (let i = 0; i < pixels.length; i += 4) {
+    for (let i = 0; i < pixels.length; i += 4) {  // Skip alpha channel
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
       // Scale from [0, 255] to [-1, 1]
-      tensor[idx++] = (pixels[i] / 127.5) - 1.0;     // R
-      tensor[idx++] = (pixels[i + 1] / 127.5) - 1.0; // G
-      tensor[idx++] = (pixels[i + 2] / 127.5) - 1.0; // B
+      inputTensor[idx++] = (r / 127.5) - 1.0;
+      inputTensor[idx++] = (g / 127.5) - 1.0;
+      inputTensor[idx++] = (b / 127.5) - 1.0;
     }
 
     skiaImage.dispose();
 
-    console.log('✅ Preprocessing COMPLETE → Float32Array ready (224×224×3)');
-    return tensor;
+    console.log(`✅ Preprocessing COMPLETE → Float32Array[${inputTensor.length}] ready`);
+    return inputTensor;
 
   } catch (error) {
     console.error('Preprocessing failed:', error);
@@ -100,6 +107,7 @@ export const useMLModel = (modelRequire: any) => {
           : asset.uri;
 
         console.log('📍 Source URI:', fromUri);
+        console.log('📍 URI type:', fromUri.startsWith('file://') ? 'FILE' : fromUri.startsWith('http') ? 'HTTP' : 'UNKNOWN');
 
         if (!fromUri) {
           const err = 'Asset has no URI after download';
