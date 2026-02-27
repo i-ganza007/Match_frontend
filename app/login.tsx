@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -45,16 +47,16 @@ export default function LoginScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.glassContainer}>
-                        <Text style={styles.title}>Welcome Back</Text>
-                        <Text style={styles.subtitle}>Access premium genetics for your farm</Text>
+                        <Text style={styles.title}>{t('login.welcomeBack', 'Welcome Back')}</Text>
+                        <Text style={styles.subtitle}>{t('login.premiumGenetics', 'Access premium genetics for your farm')}</Text>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Email or Phone</Text>
+                            <Text style={styles.label}>{t('login.emailOrPhone', 'Email or Phone')}</Text>
                             <View style={styles.inputWrapper}>
                                 <Ionicons name="mail-outline" size={20} color="#888" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Enter your email or phone"
+                                    placeholder={t('login.enterEmailOrPhone', 'Enter your email or phone')}
                                     placeholderTextColor="#666"
                                     value={email}
                                     onChangeText={setEmail}
@@ -64,12 +66,12 @@ export default function LoginScreen() {
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Password</Text>
+                            <Text style={styles.label}>{t('login.password', 'Password')}</Text>
                             <View style={styles.inputWrapper}>
                                 <Ionicons name="lock-closed-outline" size={20} color="#888" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Enter your password"
+                                    placeholder={t('login.enterPassword', 'Enter your password')}
                                     placeholderTextColor="#666"
                                     value={password}
                                     onChangeText={setPassword}
@@ -82,17 +84,17 @@ export default function LoginScreen() {
                         </View>
 
                         <TouchableOpacity style={styles.forgotPassword}>
-                            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                            <Text style={styles.forgotPasswordText}>{t('login.forgotPassword', 'Forgot Password?')}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                            <Text style={styles.loginButtonText}>Log In</Text>
+                            <Text style={styles.loginButtonText}>{t('login.login', 'Log In')}</Text>
                             <Ionicons name="arrow-forward" size={20} color="#000" style={styles.loginButtonIcon} />
                         </TouchableOpacity>
 
                         <View style={styles.dividerContainer}>
                             <View style={styles.divider} />
-                            <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+                            <Text style={styles.dividerText}>{t('login.orContinueWith', 'OR CONTINUE WITH')}</Text>
                             <View style={styles.divider} />
                         </View>
 
@@ -106,9 +108,9 @@ export default function LoginScreen() {
                         </View>
 
                         <View style={styles.footerContainer}>
-                            <Text style={styles.footerText}>Don't have an account? </Text>
+                            <Text style={styles.footerText}>{t('login.noAccount', "Don't have an account?")} </Text>
                             <TouchableOpacity onPress={navigateToSignup}>
-                                <Text style={styles.signupText}>Sign Up</Text>
+                                <Text style={styles.signupText}>{t('login.signup', 'Sign Up')}</Text>
                             </TouchableOpacity>
                         </View>
 

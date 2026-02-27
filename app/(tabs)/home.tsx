@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, TextInput, StyleSheet, Dimensions, Platform, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import Animated, { useAnimatedStyle, withRepeat, withSequence, withTiming, useSh
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -58,6 +59,18 @@ const PulseMarker = ({ delay = 0, size = 32 }: { delay?: number, size?: number }
 export default function Home() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { t, i18n } = useTranslation();
+    const [currentLang, setCurrentLang] = useState(i18n.language?.split('-')[0] || 'en');
+
+    const toggleLanguage = () => {
+        console.log('Current lang before toggle:', currentLang);
+        console.log('i18n.language:', i18n.language);
+        const newLang = currentLang === 'rw' ? 'en' : 'rw';
+        console.log('Switching to:', newLang);
+        i18n.changeLanguage(newLang);
+        setCurrentLang(newLang);
+        console.log('Language changed to:', newLang);
+    };
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -68,38 +81,40 @@ export default function Home() {
                         <MaterialIcons name="search" size={20} color={colors.icon} />
                         <TextInput
                             style={[styles.searchInput, { color: colors.text }]}
-                            placeholder="Search breeds, farmers..."
+                            placeholder={t('home.searchPlaceholder', 'Search breeds, farmers...')}
                             placeholderTextColor={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"}
                         />
                         <ThemeToggle size={20} showGlass={false} />
                     </GlassView>
-                    <GlassView style={styles.langToggle}>
-                        <View style={styles.langBtnActive}>
-                            <Text style={styles.langTextActive}>KIN</Text>
-                        </View>
-                        <View style={styles.langBtn}>
-                            <Text style={styles.langText}>ENG</Text>
-                        </View>
-                    </GlassView>
+                    <TouchableOpacity onPress={toggleLanguage}>
+                        <GlassView style={styles.langToggle}>
+                            <View style={currentLang === 'rw' ? styles.langBtnActive : styles.langBtn}>
+                                <Text style={currentLang === 'rw' ? styles.langTextActive : styles.langText}>KIN</Text>
+                            </View>
+                            <View style={currentLang === 'en' ? styles.langBtnActive : styles.langBtn}>
+                                <Text style={currentLang === 'en' ? styles.langTextActive : styles.langText}>ENG</Text>
+                            </View>
+                        </GlassView>
+                    </TouchableOpacity>
                 </View>
 
                 {/* 2. Species Quick-Filter */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                     <View style={[styles.filterPill, styles.filterPillActive]}>
                         <MaterialIcons name="pets" size={18} color="#FFD700" />
-                        <Text style={styles.filterTextActive}>Cows</Text>
+                        <Text style={styles.filterTextActive}>{t('camera.species.cow')}</Text>
                     </View>
                     <GlassView style={styles.filterPill}>
                         <MaterialCommunityIcons name="egg-outline" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>Goats</Text>
+                        <Text style={styles.filterText}>{t('camera.species.goat')}</Text>
                     </GlassView>
                     <GlassView style={styles.filterPill}>
                         <MaterialCommunityIcons name="grass" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>Sheep</Text>
+                        <Text style={styles.filterText}>{t('camera.species.sheep')}</Text>
                     </GlassView>
                     <GlassView style={styles.filterPill}>
                         <MaterialIcons name="auto-awesome" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>Pigs</Text>
+                        <Text style={styles.filterText}>{t('camera.species.pig')}</Text>
                     </GlassView>
                 </ScrollView>
 
@@ -119,17 +134,17 @@ export default function Home() {
 
                                 <GlassView style={styles.premiumBadge}>
                                     <MaterialIcons name="verified" size={12} color="#11d41e" />
-                                    <Text style={styles.premiumText}>PREMIUM MATCH</Text>
+                                    <Text style={styles.premiumText}>{t('home.premiumMatch', 'PREMIUM MATCH')}</Text>
                                 </GlassView>
 
                                 <View style={styles.featuredInfo}>
                                     <View style={styles.featuredRow}>
                                         <View>
-                                            <Text style={[styles.featuredTitle, { color: colors.text }]}>Amavubi Genetics</Text>
-                                            <Text style={[styles.featuredSubtitle, { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }]}>Holstein-Friesian • Musanze, RW</Text>
+                                            <Text style={[styles.featuredTitle, { color: colors.text }]}>{t('home.featuredTitle', 'Amavubi Genetics')}</Text>
+                                            <Text style={[styles.featuredSubtitle, { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }]}>{t('home.featuredSubtitle', 'Holstein-Friesian • Musanze, RW')}</Text>
                                         </View>
                                         <View style={styles.matchBadge}>
-                                            <Text style={styles.matchScore}>98% MATCH</Text>
+                                            <Text style={styles.matchScore}>98% {t('home.match', 'MATCH')}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -138,17 +153,17 @@ export default function Home() {
                             <View style={styles.featuredStats}>
                                 <View style={styles.statGroup}>
                                     <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>MILK YIELD</Text>
+                                        <Text style={styles.statLabel}>{t('home.milkYield', 'MILK YIELD')}</Text>
                                         <Text style={styles.statValue}>32L/Day</Text>
                                     </View>
                                     <View style={styles.statDivider} />
                                     <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>FERTILITY</Text>
-                                        <Text style={styles.statValue}>High</Text>
+                                        <Text style={styles.statLabel}>{t('home.fertility', 'FERTILITY')}</Text>
+                                        <Text style={styles.statValue}>{t('home.high', 'High')}</Text>
                                     </View>
                                 </View>
                                 <TouchableOpacity style={styles.viewBtn}>
-                                    <Text style={styles.viewBtnText}>VIEW DETAILS</Text>
+                                    <Text style={styles.viewBtnText}>{t('home.viewDetails', 'VIEW DETAILS')}</Text>
                                 </TouchableOpacity>
                             </View>
                         </GlassView>
@@ -159,18 +174,18 @@ export default function Home() {
                 <View style={styles.statsRow}>
                     <GlassView style={styles.statCard}>
                         <MaterialIcons name="grid-view" size={60} color="rgba(255,255,255,0.05)" style={styles.statIconBg} />
-                        <Text style={styles.statCardLabel}>Your Herd</Text>
+                        <Text style={styles.statCardLabel}>{t('home.yourHerd', 'Your Herd')}</Text>
                         <View style={styles.statCardRow}>
                             <Text style={styles.statCardValue}>12</Text>
-                            <Text style={styles.statCardTrend}>+2 New</Text>
+                            <Text style={styles.statCardTrend}>+2 {t('home.newAnimals', 'New')}</Text>
                         </View>
                     </GlassView>
                     <GlassView style={styles.statCard}>
                         <MaterialIcons name="analytics" size={60} color="rgba(255,255,255,0.05)" style={styles.statIconBg} />
-                        <Text style={styles.statCardLabel}>Recent Matches</Text>
+                        <Text style={styles.statCardLabel}>{t('home.recentMatches', 'Recent Matches')}</Text>
                         <View style={styles.statCardRow}>
                             <Text style={styles.statCardValue}>03</Text>
-                            <Text style={styles.statCardSub}>this week</Text>
+                            <Text style={styles.statCardSub}>{t('home.thisWeek', 'this week')}</Text>
                         </View>
                     </GlassView>
                 </View>
@@ -178,8 +193,8 @@ export default function Home() {
                 {/* 5. Map Preview */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>BREEDERS NEAR YOU</Text>
-                        <Text style={styles.sectionAction}>EXPAND MAP</Text>
+                        <Text style={styles.sectionTitle}>{t('home.breedersNearYou', 'BREEDERS NEAR YOU')}</Text>
+                        <Text style={styles.sectionAction}>{t('home.expandMap', 'EXPAND MAP')}</Text>
                     </View>
                     <GlassView style={styles.mapContainer}>
                         <Image
@@ -201,8 +216,8 @@ export default function Home() {
                         <GlassView style={styles.mapOverlay} bright>
                             <MaterialIcons name="location-on" size={20} color="#11d41e" />
                             <View>
-                                <Text style={styles.mapOverlayTitle}>8 Active Breeders</Text>
-                                <Text style={styles.mapOverlaySub}>Within 15km of Nyabugogo</Text>
+                                <Text style={styles.mapOverlayTitle}>8 {t('home.activeBreeders', 'Active Breeders')}</Text>
+                                <Text style={styles.mapOverlaySub}>{t('home.within', 'Within 15km of Nyabugogo')}</Text>
                             </View>
                         </GlassView>
                     </GlassView>
@@ -210,7 +225,7 @@ export default function Home() {
 
                 {/* 6. Network/Chat */}
                 <View style={[styles.section, { marginBottom: 100 }]}>
-                    <Text style={[styles.sectionTitle, { marginBottom: 16 }]}>FARMER NETWORK</Text>
+                    <Text style={[styles.sectionTitle, { marginBottom: 16 }]}>{t('home.farmerNetwork', 'FARMER NETWORK')}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.networkScroll}>
                         <View style={styles.networkItem}>
                             <View style={styles.avatarContainer}>
@@ -266,7 +281,7 @@ export default function Home() {
                                     <MaterialIcons name="add" size={24} color="rgba(255,255,255,0.2)" />
                                 </GlassView>
                             </View>
-                            <Text style={styles.networkName}>Invite</Text>
+                            <Text style={styles.networkName}>{t('home.invite', 'Invite')}</Text>
                         </View>
                     </ScrollView>
                 </View>
@@ -290,19 +305,19 @@ export default function Home() {
                 <View style={[styles.navBar, { backgroundColor: '#081209', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="home" size={24} color={colors.primaryGreen} />
-                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>HOME</Text>
+                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>{t('common.home', 'HOME')}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.navItem}>
+                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/(genetics)')}>
                         <MaterialIcons name="hub" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>GENETICS</Text>
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>{t('common.genetics', 'GENETICS')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/messages')}>
                         <MaterialIcons name="chat-bubble-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>CHAT</Text>
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>{t('common.chat', 'CHAT')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="person-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>PROFILE</Text>
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>{t('common.profile', 'PROFILE')}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

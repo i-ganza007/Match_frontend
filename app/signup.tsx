@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 
 export default function SignupScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
@@ -53,7 +55,7 @@ export default function SignupScreen() {
                         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#FFF" />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Sign Up</Text>
+                        <Text style={styles.headerTitle}>{t('signup.header', 'Sign Up')}</Text>
                         <View style={{ width: 40 }} />
                     </View>
 
@@ -63,13 +65,13 @@ export default function SignupScreen() {
                         <View style={styles.stepDot} />
                     </View>
 
-                    <Text style={styles.title}>Create Account</Text>
-                    <Text style={styles.subtitle}>Join the premium network for genetic matching.</Text>
+                    <Text style={styles.title}>{t('signup.createAccount', 'Create Account')}</Text>
+                    <Text style={styles.subtitle}>{t('signup.premiumNetwork', 'Join the premium network for genetic matching.')}</Text>
 
                     <View style={styles.formContainer}>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Full Name</Text>
+                            <Text style={styles.label}>{t('signup.fullName', 'Full Name')}</Text>
                             <TextInput
                                 style={styles.input}
                                 value={fullName}
@@ -78,7 +80,7 @@ export default function SignupScreen() {
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Phone Number</Text>
+                            <Text style={styles.label}>{t('signup.phoneNumber', 'Phone Number')}</Text>
                             <TextInput
                                 style={styles.input}
                                 value={phone}
@@ -88,7 +90,7 @@ export default function SignupScreen() {
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Password</Text>
+                            <Text style={styles.label}>{t('signup.password', 'Password')}</Text>
                             <TextInput
                                 style={styles.input}
                                 value={password}
@@ -99,10 +101,10 @@ export default function SignupScreen() {
 
                         <View style={styles.strengthContainer}>
                             <View style={styles.strengthRow}>
-                                <Text style={[styles.strengthText, { color: passwordStrength > 0.6 ? '#4ADE80' : '#888' }]}>
-                                    {passwordStrength > 0.6 ? 'Strong' : 'Weak'}
+                                <Text style={[styles.strengthText, { color: passwordStrength > 0.6 ? '#4ADE80' : '#888' }]}> 
+                                    {passwordStrength > 0.6 ? t('signup.strong', 'Strong') : t('signup.weak', 'Weak')}
                                 </Text>
-                                <Text style={styles.strengthLabel}>Password Strength</Text>
+                                <Text style={styles.strengthLabel}>{t('signup.passwordStrength', 'Password Strength')}</Text>
                             </View>
                             <View style={styles.strengthBarBg}>
                                 <LinearGradient
@@ -117,13 +119,13 @@ export default function SignupScreen() {
                     </View>
 
                     <TouchableOpacity style={styles.createAccountButton} onPress={handleSignup}>
-                        <Text style={styles.createAccountText}>Create Account</Text>
+                        <Text style={styles.createAccountText}>{t('signup.createAccount', 'Create Account')}</Text>
                     </TouchableOpacity>
 
                     <View style={styles.footerContainer}>
-                        <Text style={styles.footerText}>Already have an account? </Text>
+                        <Text style={styles.footerText}>{t('signup.alreadyAccount', 'Already have an account?')} </Text>
                         <TouchableOpacity onPress={navigateToLogin}>
-                            <Text style={styles.signinText}>Sign In</Text>
+                            <Text style={styles.signinText}>{t('signup.signin', 'Sign In')}</Text>
                         </TouchableOpacity>
                     </View>
 

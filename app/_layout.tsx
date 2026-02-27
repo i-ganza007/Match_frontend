@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import CustomSplashScreen from '../components/SplashScreen';
 import { ThemeProvider } from '../context/ThemeContext';
+import '../i18n';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();

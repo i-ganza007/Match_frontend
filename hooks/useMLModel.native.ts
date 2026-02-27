@@ -1,12 +1,10 @@
 // hooks/useMLModel.native.ts – model path works in dev and production (file:// copy)
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Skia, ColorType, AlphaType } from '@shopify/react-native-skia';
 import { useTensorflowModel } from 'react-native-fast-tflite';
-
-const MODEL_FILENAME = 'livestock_mobile_vnet_final.tflite';
 
 export const preprocessImageForMobileNet = async (imageUri: string): Promise<Float32Array> => {
   console.log('Preprocessing image for MobileNetV2 (224x224)...');
@@ -47,143 +45,42 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
   return inputTensor;
 };
 
-
-
 export const useMLModel = (modelRequire: any) => {
-  const [localUri, setLocalUri] = useState<string | null>(null);
-  const [isPreparing, setIsPreparing] = useState(true);
-  const [preparationError, setPreparationError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [modelPath, setModelPath] = useState<string | null>(null);
 
-  // Stable file:// path – same in dev and production
-  const destinationUri = FileSystem.documentDirectory + MODEL_FILENAME;
-
-  // 1. Load asset and get its URI directly (skip file check to avoid crash)
   useEffect(() => {
-    let cancelled = false;
-    const prepareModel = async () => {
+    (async () => {
       try {
-        console.log('📦 Starting model preparation...');
+        const [asset] = await Asset.loadAsync(modelRequire);
+        const localUri = asset.localUri || asset.uri;
         
-        if (modelRequire == null || modelRequire === undefined) {
-          const err = 'Model asset required but require() returned null/undefined';
-          console.error('❌', err);
-          setPreparationError(err);
-          setIsPreparing(false);
-          return;
-        }
-        
-        console.log('✅ Step 1: Model require is valid');
-        
-        console.log('📥 Step 2: Loading asset directly...');
-        const asset = Asset.fromModule(modelRequire);
-        console.log('✅ Asset created:', asset.name);
-        
-        console.log('⬇️ Step 3: Downloading asset...');
-        await asset.downloadAsync();
-        console.log('✅ Asset downloaded');
-
-        const fromUri = asset.localUri && asset.localUri.startsWith('file://')
-          ? asset.localUri
-          : asset.uri;
-
-        console.log('📍 Source URI:', fromUri);
-        console.log('📍 URI type:', fromUri.startsWith('file://') ? 'FILE' : fromUri.startsWith('http') ? 'HTTP' : 'UNKNOWN');
-
-        if (!fromUri) {
-          const err = 'Asset has no URI after download';
-          console.error('❌', err);
-          setPreparationError(err);
-          setIsPreparing(false);
-          return;
-        }
-
-        if (cancelled) return;
-
-        // Use the asset URI directly if it's already a file:// path
-        if (fromUri.startsWith('file://')) {
-          console.log('✅ Using asset file directly:', fromUri);
-          setLocalUri(fromUri);
-          setIsPreparing(false);
+        if (localUri.startsWith('file://')) {
+          setModelPath(localUri);
+          setIsReady(true);
+          console.log('✅ Model ready:', localUri);
         } else {
-          console.log('❌ Asset is not a file:// URI, cannot use:', fromUri);
-          setPreparationError('Asset must be a file:// URI');
-          setIsPreparing(false);
+          const destPath = `${FileSystem.documentDirectory}model.tflite`;
+          await FileSystem.copyAsync({ from: localUri, to: destPath });
+          setModelPath(destPath);
+          setIsReady(true);
+          console.log('✅ Model copied to:', destPath);
         }
-      } catch (err: any) {
-        if (!cancelled) {
-          const msg = err?.message ?? String(err);
-          console.error('❌ Model preparation FAILED:', msg);
-          console.error('❌ Error stack:', err?.stack);
-          setPreparationError(msg);
-          setIsPreparing(false);
-        }
+      } catch (e) {
+        console.error('❌ Model load failed:', e);
       }
-    };
+    })();
+  }, [modelRequire]);
 
-    prepareModel();
-    return () => { cancelled = true; };
-  }, [modelRequire, destinationUri]);
+  const model = useTensorflowModel(modelPath ? { model: modelPath } : undefined);
 
-  // 2. Only initialize TFLite AFTER file is copied
-  const modelSource = useMemo(
-    () => localUri ? { url: localUri } : null,
-    [localUri]
-  );
-  
-  const tflite = useTensorflowModel(modelSource || { url: '' });
-
-  // 3. Logging
-  useEffect(() => {
-    if (localUri && tflite.state === 'loaded') {
-      console.log('✅ TFLite model loaded successfully from:', localUri);
-    }
-    if (tflite.state === 'error' && 'error' in tflite && tflite.error) {
-      console.error('❌ TFLite load error:', tflite.error);
-    }
-  }, [tflite.state, localUri]);
-
-  // 4. Inference with retry (MobileNetV2 uses Float32)
-  const runInferenceWithRetry = async (imageUri: string, maxRetries = 3): Promise<Float32Array> => {
-    if (!localUri) {
-      throw new Error('Model file not prepared yet');
-    }
-    if (tflite.state !== 'loaded' || !tflite.model) {
-      throw new Error('Model not ready yet (still preparing or failed)');
-    }
-    if (!imageUri) throw new Error('❌ No image provided');
-
-    // Log model input/output details
-    try {
-      console.log('📊 MODEL DETAILS:');
-      console.log('  Inputs:', JSON.stringify(tflite.model.inputs));
-      console.log('  Outputs:', JSON.stringify(tflite.model.outputs));
-    } catch (e) {
-      console.log('⚠️ Could not log model details');
-    }
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const inputTensor = await preprocessImageForMobileNet(imageUri);
-        
-        const outputs = await tflite.model.run([inputTensor]);
-        const logits = outputs[0] as Float32Array;
-
-        console.log(`✅ Inference SUCCESS (attempt ${attempt})`);
-        console.log(`📊 Output length: ${logits.length}`);
-        return logits;
-      } catch (error: any) {
-        console.error(`❌ Attempt ${attempt} failed:`, error.message);
-        if (attempt === maxRetries) throw error;
-        await new Promise(r => setTimeout(r, 800 * attempt));
-      }
-    }
-    throw new Error('Inference failed after retries');
+  const runInferenceWithRetry = async (imageUri: string) => {
+    if (!isReady || !model) throw new Error('Model not ready');
+    
+    const inputTensor = await preprocessImageForMobileNet(imageUri);
+    const output = model.run([inputTensor]);
+    return output[0] as Float32Array;
   };
 
-  return {
-    ...tflite,
-    runInferenceWithRetry,
-    isReady: !!localUri && tflite.state === 'loaded' && !!tflite.model && !isPreparing,
-    preparationError,
-  };
+  return { isReady: isReady && !!model, runInferenceWithRetry };
 };
