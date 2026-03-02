@@ -1,0 +1,117 @@
+{
+  "common": {
+    "cancel": "Hagarika",
+    "confirm": "Emeza",
+    "back": "Subira",
+    "next": "Komeza",
+    "save": "Bika",
+    "home": "AHABANZA",
+    "genetics": "GENETIKE",
+    "chat": "IKIGANIRO",
+    "profile": "UMWIRONDORO"
+  },
+  "home": {
+    "title": "Guhitamo Ubwoko bw'Amatungo",
+    "subtitle": "Kumenya Ubwoko bw'Amatungo na AI",
+    "searchPlaceholder": "Shakisha ubwoko, aborozi...",
+    "yourHerd": "Amatungo Yawe",
+    "recentMatches": "Ibihuza Bigezweho",
+    "newAnimals": "Gishya",
+    "thisWeek": "iki cyumweru",
+    "breedersNearYou": "ABOROZI BARI HAFI YAWE",
+    "expandMap": "KWAGURA IKARITA",
+    "activeBreeders": "Aborozi Bakora",
+    "within": "Mu kilometero 15 za Nyabugogo",
+    "farmerNetwork": "UMURYANGO W'ABAHINZI",
+    "invite": "Tumira",
+    "premiumMatch": "IHUZA RYA PREMIUM",
+    "match": "IHUZA",
+    "viewDetails": "REBA IBISOBANURO",
+    "milkYield": "AMATA",
+    "fertility": "UBURUMBUKE",
+    "high": "Byinshi"
+  },
+  "camera": {
+    "title": "Kamera y'Ubwoko",
+    "tip": "Emeza ko hari urumuri ruhagije kugira ngo ibisubizo bibe byiza",
+    "liveDetect": "Gukoresha AI mu Gihe Nyacyo",
+    "species": {
+      "cow": "Inka",
+      "goat": "Ihene",
+      "sheep": "Intama",
+      "pig": "Ingurube"
+    }
+  },
+  "analysis": {
+    "title": "Isesengura rya AI",
+    "initializing": "Gutangiza AI...",
+    "loading": "Gupakira Moderi...",
+    "preprocessing": "Gutegura Ishusho...",
+    "running": "Gukoresha TFLite...",
+    "complete": "Isesengura Ryarangiye!",
+    "probing": "Gusuzuma Neural Engine...",
+    "description": "Gukoresha profil za genetike zo mu Rwanda kugira ngo duhitemo ubwoko bwiza bw'amatungo."
+  },
+  "result": {
+    "title": "Ubwoko Bwamenyekanye",
+    "confidence": "Ikizere",
+    "viewDetails": "Reba Ibisobanuro Byose",
+    "scanAnother": "Siga Undi"
+  },
+  "login": {
+    "welcomeBack": "Murakaza neza",
+    "premiumGenetics": "Geraho serivisi za premium za genetics ku matungo yawe",
+    "emailOrPhone": "Imeyili cyangwa Telefone",
+    "enterEmailOrPhone": "Andika imeyili cyangwa telefone yawe",
+    "password": "Ijambo ry'ibanga",
+    "enterPassword": "Andika ijambo ry'ibanga",
+    "forgotPassword": "Wibagiwe ijambo ry'ibanga?",
+    "login": "Injira",
+    "orContinueWith": "CYANGWA KOMEZA NA",
+    "noAccount": "Nta konti ufite?",
+    "signup": "Iyandikishe"
+  },
+  "signup": {
+    "header": "Iyandikishe",
+    "createAccount": "Fungura Konti",
+    "premiumNetwork": "Jya mu muryango wa premium wo guhuza genetics.",
+    "fullName": "Amazina yawe",
+    "phoneNumber": "Numero ya telefone",
+    "password": "Ijambo ry'ibanga",
+    "strong": "Rikomeye",
+    "weak": "Ryoroshye",
+    "passwordStrength": "Imbaraga z'ijambo ry'ibanga",
+    "alreadyAccount": "Ufite konti?",
+    "signin": "Injira"
+  },
+  "messages": {
+    "header": "Ubutumwa",
+    "newChat": "Ikiganiro Gishya",
+    "searchPlaceholder": "Shakisha aborozi cyangwa amatungo..."
+  },
+  "siamese": {
+    "header": "Isesengura rya Modeli ya Siamese",
+    "subjectA": "ICYITEGEREREZO A",
+    "bovineA": "Inka-724",
+    "geneticLink": "IHUZA RYA GENETIQUE",
+    "subjectB": "ICYITEGEREREZO B",
+    "bovineB": "Inka-811",
+    "matchProbability": "AMAHIRWE YO GUHUZA",
+    "highConfidence": "Ihuza rikomeye rya Genetique",
+    "ancestryCheck": "Isuzuma ry'Imvano",
+    "sameSire": "Se umwe wabonetse",
+    "phenotypeAnalysis": "Isesengura rya Phenotype",
+    "phenotypeMatch": "Ihuza rya Phenotype: Rikomeye",
+    "quantitativeData": "Amakuru y'Imibare",
+    "sharedMarkers": "124 Ibimenyetso Bihuriyeho",
+    "details": "Ibisobanuro",
+    "commonMarkers": "IBIMENYETSO BISANZWE",
+    "chr5": "CHR-5",
+    "chr12": "CHR-12",
+    "mhci": "MHC-I",
+    "bta8": "BTA-8",
+    "viewPedigree": "Reba Pedigree Irambuye",
+    "exportReport": "Ohereza Raporo",
+    "comparisonHistory": "Amateka yo Guhangana"
+  }
+}

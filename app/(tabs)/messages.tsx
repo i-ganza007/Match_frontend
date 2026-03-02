@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,7 +10,8 @@ import { MessageItem } from '../../components/MessageItem';
 
 import { useTheme } from '../../context/ThemeContext';
 
-export default function MessagesScreen() {
+export default function Messages() {
+    const { t } = useTranslation();
     const router = useRouter();
     const { colors, theme } = useTheme();
     const isDark = theme === 'dark';
@@ -93,9 +95,9 @@ export default function MessagesScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: colors.glassBackground }]}>
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>{t('messages.header', 'Messages')}</Text>
                 <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: colors.glassBackground }]}>
-                    <Text style={[styles.newChatText, { color: colors.primaryGreen }]}>New Chat</Text>
+                    <Text style={[styles.newChatText, { color: colors.primaryGreen }]}>{t('messages.newChat', 'New Chat')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -103,7 +105,7 @@ export default function MessagesScreen() {
                 <GlassView style={styles.searchBar}>
                     <MaterialIcons name="search" size={20} color={colors.icon} />
                     <TextInput
-                        placeholder="Search breeders or livestock..."
+                        placeholder={t('messages.searchPlaceholder', 'Search breeders or livestock...')}
                         placeholderTextColor={colors.icon}
                         style={[styles.searchInput, { color: colors.text }]}
                     />
@@ -130,19 +132,19 @@ export default function MessagesScreen() {
                 <GlassView style={styles.navBar}>
                     <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/home')}>
                         <MaterialIcons name="home" size={24} color={colors.icon} />
-                        <Text style={[styles.navText, { color: colors.icon }]}>HOME</Text>
+                        <Text style={[styles.navText, { color: colors.icon }]}>{t('common.home', 'HOME')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="hub" size={24} color={colors.icon} />
-                        <Text style={[styles.navText, { color: colors.icon }]}>GENETICS</Text>
+                        <Text style={[styles.navText, { color: colors.icon }]}>{t('common.genetics', 'GENETICS')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="chat-bubble-outline" size={24} color={colors.primaryGreen} />
-                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>CHAT</Text>
+                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>{t('common.chat', 'CHAT')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
                         <MaterialIcons name="person-outline" size={24} color={colors.icon} />
-                        <Text style={[styles.navText, { color: colors.icon }]}>PROFILE</Text>
+                        <Text style={[styles.navText, { color: colors.icon }]}>{t('common.profile', 'PROFILE')}</Text>
                     </TouchableOpacity>
                 </GlassView>
             </View>
