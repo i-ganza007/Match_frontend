@@ -1,0 +1,4 @@
+livestock_resnet50_final.h5 filter=lfs diff=lfs merge=lfs -text
+livestock_biometric_float16.tflite filter=lfs diff=lfs merge=lfs -text
+livestock_mobile_vnet_final.tflite filter=lfs diff=lfs merge=lfs -text
+assets/models filter=lfs diff=lfs merge=lfs -text
