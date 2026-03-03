@@ -39,12 +39,21 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="scanning/analysis" options={{ headerShown: false }} />
         <Stack.Screen name="scanning/result" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="conversation/[id]" options={{ headerShown: false }} />
+        <Stack.Screen 
+          name="map-test" 
+          options={{ 
+            headerShown: true,
+            title: 'Users Map - Test',
+            headerStyle: { backgroundColor: '#081209' },
+            headerTintColor: '#11d41e',
+          }} 
+        />
       </Stack>
     </ThemeProvider>
   )

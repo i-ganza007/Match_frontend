@@ -1,10 +1,9 @@
-// hooks/useMLModel.native.ts – model path works in dev and production (file:// copy)
+// hooks/useMLModel.native.ts – MOCK MODE FOR TESTING
 import { useState, useEffect } from 'react';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Skia, ColorType, AlphaType } from '@shopify/react-native-skia';
-import { useTensorflowModel } from 'react-native-fast-tflite';
 
 export const preprocessImageForMobileNet = async (imageUri: string): Promise<Float32Array> => {
   console.log('Preprocessing image for MobileNetV2 (224x224)...');
@@ -47,40 +46,22 @@ export const preprocessImageForMobileNet = async (imageUri: string): Promise<Flo
 
 export const useMLModel = (modelRequire: any) => {
   const [isReady, setIsReady] = useState(false);
-  const [modelPath, setModelPath] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [asset] = await Asset.loadAsync(modelRequire);
-        const localUri = asset.localUri || asset.uri;
-        
-        if (localUri.startsWith('file://')) {
-          setModelPath(localUri);
-          setIsReady(true);
-          console.log('✅ Model ready:', localUri);
-        } else {
-          const destPath = `${FileSystem.documentDirectory}model.tflite`;
-          await FileSystem.copyAsync({ from: localUri, to: destPath });
-          setModelPath(destPath);
-          setIsReady(true);
-          console.log('✅ Model copied to:', destPath);
-        }
-      } catch (e) {
-        console.error('❌ Model load failed:', e);
-      }
-    })();
-  }, [modelRequire]);
-
-  const model = useTensorflowModel(modelPath ? { model: modelPath } : undefined);
+    setTimeout(() => setIsReady(true), 500);
+  }, []);
 
   const runInferenceWithRetry = async (imageUri: string) => {
-    if (!isReady || !model) throw new Error('Model not ready');
+    console.log('🔄 MOCK MODE - Simulating inference');
+    await new Promise(r => setTimeout(r, 1000));
     
-    const inputTensor = await preprocessImageForMobileNet(imageUri);
-    const output = model.run([inputTensor]);
-    return output[0] as Float32Array;
+    // Mock output: 512D for Siamese, 14D for breed classifier
+    const mockOutput = new Float32Array(512);
+    for (let i = 0; i < mockOutput.length; i++) {
+      mockOutput[i] = Math.random() * 0.1;
+    }
+    return mockOutput;
   };
 
-  return { isReady: isReady && !!model, runInferenceWithRetry };
+  return { isReady, runInferenceWithRetry };
 };
