@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { signup, SignupData } from '../services/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,9 +14,17 @@ export default function SignupScreen() {
     const router = useRouter();
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [sex, setSex] = useState<'MALE' | 'FEMALE'>('MALE');
+    const [district, setDistrict] = useState('');
+    const [sector, setSector] = useState('');
+    const [village, setVillage] = useState('');
+    const [cell, setCell] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
-    // Password strength visual logic (simple mock)
+    // Password strength visual logic
     const getPasswordStrength = (pass: string) => {
         if (pass.length === 0) return 0;
         if (pass.length < 6) return 0.3;
@@ -25,13 +34,52 @@ export default function SignupScreen() {
 
     const passwordStrength = getPasswordStrength(password);
 
-    const handleSignup = () => {
-        // Should navigate to home or verify
-        router.replace('/(tabs)/home');
-    };
+    const handleSignup = async () => {
+        // Validation
+        if (!fullName.trim() || !phone.trim() || !password.trim()) {
+            Alert.alert('Error', 'Please fill in all required fields');
+            return;
+        }
 
-    const navigateToLogin = () => {
-        router.back();
+        if (!district.trim() || !sector.trim() || !village.trim() || !cell.trim()) {
+            Alert.alert('Error', 'Please fill in all location details');
+            return;
+        }
+
+        if (password.length < 6) {
+            Alert.alert('Error', 'Password must be at least 6 characters');
+            return;
+        }
+
+        setLoading(true);
+
+        const signupData: SignupData = {
+            name: fullName.trim(),
+            sex,
+            password,
+            phone_number: phone.trim(),
+            email: email.trim() || undefined,
+            district: district.trim(),
+            sector: sector.trim(),
+            village: village.trim(),
+            cell: cell.trim(),
+        };
+
+        const result = await signup(signupData);
+
+        setLoading(false);
+
+        if (result.success) {
+            // Show success notification and redirect to home
+            Alert.alert(
+                '🎉 Welcome!', 
+                'Account created successfully!',
+                [{ text: 'Continue', onPress: () => router.replace('/(tabs)/home') }],
+                { cancelable: false }
+            );
+        } else {
+            Alert.alert('Signup Failed', result.message || 'Please try again');
+        }
     };
 
     return (
@@ -76,6 +124,8 @@ export default function SignupScreen() {
                                 style={styles.input}
                                 value={fullName}
                                 onChangeText={setFullName}
+                                placeholder="Enter your full name"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
@@ -86,17 +136,112 @@ export default function SignupScreen() {
                                 value={phone}
                                 onChangeText={setPhone}
                                 keyboardType="phone-pad"
+                                placeholder="Enter phone number"
+                                placeholderTextColor="#999"
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.email', 'Email (Optional)')}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                placeholder="Enter email"
+                                placeholderTextColor="#999"
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.sex', 'Gender')}</Text>
+                            <View style={styles.genderContainer}>
+                                <TouchableOpacity
+                                    style={[styles.genderButton, sex === 'MALE' && styles.genderButtonActive]}
+                                    onPress={() => setSex('MALE')}
+                                >
+                                    <Text style={[styles.genderText, sex === 'MALE' && styles.genderTextActive]}>
+                                        Male
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.genderButton, sex === 'FEMALE' && styles.genderButtonActive]}
+                                    onPress={() => setSex('FEMALE')}
+                                >
+                                    <Text style={[styles.genderText, sex === 'FEMALE' && styles.genderTextActive]}>
+                                        Female
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.district', 'District')}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={district}
+                                onChangeText={setDistrict}
+                                placeholder="Enter district"
+                                placeholderTextColor="#999"
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.sector', 'Sector')}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={sector}
+                                onChangeText={setSector}
+                                placeholder="Enter sector"
+                                placeholderTextColor="#999"
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.cell', 'Cell')}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={cell}
+                                onChangeText={setCell}
+                                placeholder="Enter cell"
+                                placeholderTextColor="#999"
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.label}>{t('signup.village', 'Village')}</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={village}
+                                onChangeText={setVillage}
+                                placeholder="Enter village"
+                                placeholderTextColor="#999"
                             />
                         </View>
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>{t('signup.password', 'Password')}</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
+                            <View style={styles.passwordInputWrapper}>
+                                <TextInput
+                                    style={[styles.input, { flex: 1 }]}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                    placeholder="Enter password"
+                                    placeholderTextColor="#999"
+                                />
+                                <TouchableOpacity 
+                                    onPress={() => setShowPassword(!showPassword)}
+                                    style={styles.eyeIcon}
+                                >
+                                    <Ionicons 
+                                        name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                                        size={20} 
+                                        color="#666" 
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={styles.strengthContainer}>
@@ -118,16 +263,17 @@ export default function SignupScreen() {
 
                     </View>
 
-                    <TouchableOpacity style={styles.createAccountButton} onPress={handleSignup}>
-                        <Text style={styles.createAccountText}>{t('signup.createAccount', 'Create Account')}</Text>
+                    <TouchableOpacity 
+                        style={[styles.createAccountButton, loading && styles.buttonDisabled]} 
+                        onPress={handleSignup}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#000" />
+                        ) : (
+                            <Text style={styles.createAccountText}>{t('signup.createAccount', 'Create Account')}</Text>
+                        )}
                     </TouchableOpacity>
-
-                    <View style={styles.footerContainer}>
-                        <Text style={styles.footerText}>{t('signup.alreadyAccount', 'Already have an account?')} </Text>
-                        <TouchableOpacity onPress={navigateToLogin}>
-                            <Text style={styles.signinText}>{t('signup.signin', 'Sign In')}</Text>
-                        </TouchableOpacity>
-                    </View>
 
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -278,5 +424,44 @@ const styles = StyleSheet.create({
         color: '#22C55E',
         fontSize: 14,
         fontWeight: 'bold',
+    },
+    genderContainer: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    genderButton: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 25,
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    genderButtonActive: {
+        borderColor: '#22C55E',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    },
+    genderText: {
+        fontSize: 16,
+        color: '#666',
+        fontWeight: '500',
+    },
+    genderTextActive: {
+        color: '#22C55E',
+        fontWeight: 'bold',
+    },
+    passwordInputWrapper: {
+        position: 'relative',
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    eyeIcon: {
+        position: 'absolute',
+        right: 16,
+        padding: 4,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
     },
 });

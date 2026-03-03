@@ -86,6 +86,11 @@ export default function Home() {
                         />
                         <ThemeToggle size={20} showGlass={false} />
                     </GlassView>
+                    <TouchableOpacity onPress={() => router.push('/map-test')}>
+                        <GlassView style={styles.langToggle}>
+                            <MaterialIcons name="map" size={20} color="#11d41e" />
+                        </GlassView>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={toggleLanguage}>
                         <GlassView style={styles.langToggle}>
                             <View style={currentLang === 'rw' ? styles.langBtnActive : styles.langBtn}>
@@ -108,7 +113,7 @@ export default function Home() {
                         <MaterialCommunityIcons name="egg-outline" size={18} color="rgba(255,255,255,0.4)" />
                         <Text style={styles.filterText}>{t('camera.species.goat')}</Text>
                     </GlassView>
-                    <GlassView style={styles.filterPill}>
+                   <GlassView style={styles.filterPill}>
                         <MaterialCommunityIcons name="grass" size={18} color="rgba(255,255,255,0.4)" />
                         <Text style={styles.filterText}>{t('camera.species.sheep')}</Text>
                     </GlassView>
@@ -194,33 +199,40 @@ export default function Home() {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>{t('home.breedersNearYou', 'BREEDERS NEAR YOU')}</Text>
-                        <Text style={styles.sectionAction}>{t('home.expandMap', 'EXPAND MAP')}</Text>
+                        <TouchableOpacity onPress={() => router.push('/map-test')}>
+                            <Text style={styles.sectionAction}>{t('home.expandMap', 'EXPAND MAP')}</Text>
+                        </TouchableOpacity>
                     </View>
-                    <GlassView style={styles.mapContainer}>
-                        <Image
-                            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD0wmewPGMAiKRUfzoZwc-2yr3RdJSYCOW3milMOhVLs7qaX_gSJ0J34z5nTwWIVH3xZz1Q-gxCv87Drc0tduJWDFK91xS3K1eLY5aQoR4FSTM7D9F4nWFDBAwsKrdEWKNRxAj-NL2yHTrCBh0wNO22J37R_wSPy5vuQWeZ4-CF2tv6n11Rd2qV4qojLDv4VSDAtL5gFP-8O3JkmejfkcNmBkjU4AdQuX-VSRIifCkqm9ec-AaloaS1HUPfQtjTP5Djw95SGc2WCHE' }}
-                            style={styles.mapImage}
-                        />
+                    <TouchableOpacity 
+                        onPress={() => router.push('/map-test')} 
+                        activeOpacity={0.8}
+                    >
+                        <GlassView style={styles.mapContainer}>
+                            <Image
+                                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD0wmewPGMAiKRUfzoZwc-2yr3RdJSYCOW3milMOhVLs7qaX_gSJ0J34z5nTwWIVH3xZz1Q-gxCv87Drc0tduJWDFK91xS3K1eLY5aQoR4FSTM7D9F4nWFDBAwsKrdEWKNRxAj-NL2yHTrCBh0wNO22J37R_wSPy5vuQWeZ4-CF2tv6n11Rd2qV4qojLDv4VSDAtL5gFP-8O3JkmejfkcNmBkjU4AdQuX-VSRIifCkqm9ec-AaloaS1HUPfQtjTP5Djw95SGc2WCHE' }}
+                                style={styles.mapImage}
+                            />
 
-                        {/* Map Pins */}
-                        <View style={{ position: 'absolute', top: '50%', left: '33%' }}>
-                            <PulseMarker />
-                        </View>
-                        <View style={{ position: 'absolute', top: '25%', right: '25%' }}>
-                            <PulseMarker delay={1000} size={24} />
-                        </View>
-                        <View style={{ position: 'absolute', bottom: '25%', right: '33%' }}>
-                            <PulseMarker delay={500} size={40} />
-                        </View>
-
-                        <GlassView style={styles.mapOverlay} bright>
-                            <MaterialIcons name="location-on" size={20} color="#11d41e" />
-                            <View>
-                                <Text style={styles.mapOverlayTitle}>8 {t('home.activeBreeders', 'Active Breeders')}</Text>
-                                <Text style={styles.mapOverlaySub}>{t('home.within', 'Within 15km of Nyabugogo')}</Text>
+                            {/* Map Pins */}
+                            <View style={{ position: 'absolute', top: '50%', left: '33%' }}>
+                                <PulseMarker />
                             </View>
+                            <View style={{ position: 'absolute', top: '25%', right: '25%' }}>
+                                <PulseMarker delay={1000} size={24} />
+                            </View>
+                            <View style={{ position: 'absolute', bottom: '25%', right: '33%' }}>
+                                <PulseMarker delay={500} size={40} />
+                            </View>
+
+                            <GlassView style={styles.mapOverlay} bright>
+                                <MaterialIcons name="location-on" size={20} color="#11d41e" />
+                                <View>
+                                    <Text style={styles.mapOverlayTitle}>8 {t('home.activeBreeders', 'Active Breeders')}</Text>
+                                    <Text style={styles.mapOverlaySub}>{t('home.within', 'Within 15km of Nyabugogo')}</Text>
+                                </View>
+                            </GlassView>
                         </GlassView>
-                    </GlassView>
+                    </TouchableOpacity>
                 </View>
 
                 {/* 6. Network/Chat */}

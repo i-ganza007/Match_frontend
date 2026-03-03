@@ -36,17 +36,6 @@ export default function IndexTab() {
               <AntDesign name="arrow-right" size={14} style={{ marginLeft: 10 }} color="white" />
             </Button>
           </Link>
-          <Link href="/login" asChild>
-            <Button
-              mode="outlined"
-              style={styles.secondaryButton}
-              textColor="#FFFFFF"
-              contentStyle={styles.buttonContent}
-              labelStyle={styles.buttonText}
-            >
-              Login to Account
-            </Button>
-          </Link>
         </View>
       </View>
     </View>
