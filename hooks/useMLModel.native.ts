@@ -63,5 +63,5 @@ export const useMLModel = (modelRequire: any) => {
     return mockOutput;
   };
 
-  return { isReady, runInferenceWithRetry };
+  return { isReady, runInferenceWithRetry, state: 'loaded', preparationError: null };
 };

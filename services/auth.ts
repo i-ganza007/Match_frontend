@@ -118,6 +118,15 @@ export const signup = async (data: SignupData): Promise<{
     console.error('Signup error:', error);
     console.error('Error response:', error.response?.data);
     console.error('Error status:', error.response?.status);
+
+    // No response = network-level failure (server asleep on Render free tier, no connection, etc.)
+    if (!error.response) {
+      return {
+        success: false,
+        message: 'Cannot reach the server. Check your internet connection and try again. If the problem persists, the server may be waking up — wait a moment and retry.',
+      };
+    }
+
     return {
       success: false,
       message: error.response?.data?.message || error.message || 'Signup failed. Please try again.',

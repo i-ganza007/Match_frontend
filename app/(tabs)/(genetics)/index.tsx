@@ -49,7 +49,14 @@ export default function GeneticsIndexScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                <View>
+                <TouchableOpacity
+                    onPress={() => router.push('/(tabs)/home' as any)}
+                    style={styles.backBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <MaterialIcons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <View style={styles.headerCenter}>
                     <Text style={styles.headline}>Genetics</Text>
                     <Text style={styles.subHeadline}>Lineage, Verification & AI Analysis</Text>
                 </View>
@@ -111,6 +118,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 16,
         paddingBottom: 32,
+    },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerCenter: {
+        flex: 1,
+        paddingHorizontal: 12,
     },
     headline: {
         color: '#fff',
