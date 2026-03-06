@@ -113,7 +113,7 @@ export default function Home() {
                         <MaterialCommunityIcons name="egg-outline" size={18} color="rgba(255,255,255,0.4)" />
                         <Text style={styles.filterText}>{t('camera.species.goat')}</Text>
                     </GlassView>
-                   <GlassView style={styles.filterPill}>
+                    <GlassView style={styles.filterPill}>
                         <MaterialCommunityIcons name="grass" size={18} color="rgba(255,255,255,0.4)" />
                         <Text style={styles.filterText}>{t('camera.species.sheep')}</Text>
                     </GlassView>
@@ -203,8 +203,8 @@ export default function Home() {
                             <Text style={styles.sectionAction}>{t('home.expandMap', 'EXPAND MAP')}</Text>
                         </TouchableOpacity>
                     </View>
-                    <TouchableOpacity 
-                        onPress={() => router.push('/map-test')} 
+                    <TouchableOpacity
+                        onPress={() => router.push('/map-test')}
                         activeOpacity={0.8}
                     >
                         <GlassView style={styles.mapContainer}>
@@ -327,9 +327,9 @@ export default function Home() {
                         <MaterialIcons name="chat-bubble-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
                         <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>{t('common.chat', 'CHAT')}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.navItem}>
-                        <MaterialIcons name="person-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>{t('common.profile', 'PROFILE')}</Text>
+                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/register-animal' as any)}>
+                        <MaterialCommunityIcons name="plus-circle-outline" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
+                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>ADD</Text>
                     </TouchableOpacity>
                 </View>
             </View>

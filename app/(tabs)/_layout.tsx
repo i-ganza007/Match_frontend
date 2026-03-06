@@ -14,6 +14,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" />
       <Tabs.Screen name="breed-camera" />
       <Tabs.Screen name="messages" />
+      <Tabs.Screen name="register-animal" />
+      <Tabs.Screen name="animal-profile" />
+      <Tabs.Screen name="animal-performance" />
       {/* Genetics group – keeps its stack but tab bar is hidden (custom nav in home.tsx) */}
       <Tabs.Screen name="(genetics)" />
     </Tabs>
