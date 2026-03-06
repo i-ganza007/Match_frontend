@@ -68,13 +68,14 @@ export const signup = async (data: SignupData): Promise<{
   user?: User;
 }> => {
   try {
-    // Get location
+    // Get location (permission was already requested on the signup screen,
+    // but getCurrentLocation will try once more as a fallback)
     const location = await getCurrentLocation();
-    
+
     if (!location) {
       return {
         success: false,
-        message: 'Location permission required for signup',
+        message: 'Could not retrieve your location. Please enable location access and try again.',
       };
     }
 

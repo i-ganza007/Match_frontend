@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions } from
 import { Image } from 'expo-image';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -32,9 +32,10 @@ const GlassView = ({ children, style, bright = false }: { children: React.ReactN
 export default function SiameseAnalysisScreen() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { imageA, imageB, matchScore } = useLocalSearchParams<{ imageA: string; imageB: string; matchScore: string }>();
 
-    const placeholderImgA = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDspxML4A6SYRldREK3Cc4esLzSzwZLPLw1cc7Lb5EsGcqHWLflsQ-G6fH_qCLCvIq-5f_ibGOm9fROQ0jDdp145XhKMkrblOMPziKdK9erPESIfwUT8RhbbLDcTZWULYGkxbzhnjjOpVYfrHD8GNYuqFIoOI3yfC9Lm4ao44L2R7lYro1dPqPsGXra21gepLknV2fO_6l80_eb81lx1ElO_gmKbz4Tio3mTtKHMdM4FpK7IZS_B8Z-WoXNudy-C02qXJYsyvtpld0';
-    const placeholderImgB = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDspxML4A6SYRldREK3Cc4esLzSzwZLPLw1cc7Lb5EsGcqHWLflsQ-G6fH_qCLCvIq-5f_ibGOm9fROQ0jDdp145XhKMkrblOMPziKdK9erPESIfwUT8RhbbLDcTZWULYGkxbzhnjjOpVYfrHD8GNYuqFIoOI3yfC9Lm4ao44L2R7lYro1dPqPsGXra21gepLknV2fO_6l80_eb81lx1ElO_gmKbz4Tio3mTtKHMdM4FpK7IZS_B8Z-WoXNudy-C02qXJYsyvtpld0';
+    const displayMatchScore = parseInt(matchScore ?? '0') || 0;
+    const isHighConfidence = displayMatchScore >= 70;
 
 
     return (
@@ -59,10 +60,16 @@ export default function SiameseAnalysisScreen() {
 
                     <View style={styles.subjectItem}>
                         <View style={styles.subjectImageBorder}>
-                            <Image source={{ uri: placeholderImgA }} style={styles.subjectImage} />
+                            {imageA ? (
+                                <Image source={{ uri: imageA }} style={styles.subjectImage} contentFit="cover" />
+                            ) : (
+                                <View style={[styles.subjectImage, { backgroundColor: 'rgba(17,212,30,0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                                    <MaterialIcons name="image-not-supported" size={24} color="rgba(255,255,255,0.3)" />
+                                </View>
+                            )}
                         </View>
                         <Text style={styles.subjectLabelLabel}>SUBJECT A</Text>
-                        <Text style={styles.subjectName}>Bovine-724</Text>
+                        <Text style={styles.subjectName}>Animal A</Text>
                     </View>
 
                     <View style={styles.linkPillContainer}>
@@ -73,10 +80,16 @@ export default function SiameseAnalysisScreen() {
 
                     <View style={styles.subjectItem}>
                         <View style={styles.subjectImageBorder}>
-                            <Image source={{ uri: placeholderImgB }} style={styles.subjectImage} />
+                            {imageB ? (
+                                <Image source={{ uri: imageB }} style={styles.subjectImage} contentFit="cover" />
+                            ) : (
+                                <View style={[styles.subjectImage, { backgroundColor: 'rgba(17,212,30,0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                                    <MaterialIcons name="image-not-supported" size={24} color="rgba(255,255,255,0.3)" />
+                                </View>
+                            )}
                         </View>
                         <Text style={styles.subjectLabelLabel}>SUBJECT B</Text>
-                        <Text style={styles.subjectName}>Bovine-811</Text>
+                        <Text style={styles.subjectName}>Animal B</Text>
                     </View>
                 </View>
 
@@ -85,17 +98,23 @@ export default function SiameseAnalysisScreen() {
                     <View style={styles.outerCircle}>
                         <View style={styles.innerCircle}>
                             <View style={styles.matchContent}>
-                                <Text style={styles.matchValue}>85%</Text>
+                                <Text style={styles.matchValue}>{displayMatchScore}%</Text>
                                 <Text style={styles.matchLabel}>MATCH PROBABILITY</Text>
                             </View>
                         </View>
                     </View>
                 </View>
 
-                {/* High Confidence Tag */}
+                {/* Confidence Tag */}
                 <View style={styles.confidenceTag}>
-                    <MaterialIcons name="check-circle" size={16} color="#11d41e" />
-                    <Text style={styles.confidenceText}>High Confidence Genetic Match</Text>
+                    <MaterialIcons
+                        name={isHighConfidence ? 'check-circle' : 'warning'}
+                        size={16}
+                        color={isHighConfidence ? '#11d41e' : '#EAB308'}
+                    />
+                    <Text style={[styles.confidenceText, !isHighConfidence && { color: 'rgba(234,179,8,0.8)' }]}>
+                        {isHighConfidence ? 'High Confidence Genetic Match' : 'Low Confidence — Likely Unrelated'}
+                    </Text>
                 </View>
 
                 {/* Detail Cards List */}
@@ -117,13 +136,13 @@ export default function SiameseAnalysisScreen() {
                                 <MaterialCommunityIcons name="dna" size={20} color="#11d41e" />
                             </View>
                             <View style={styles.listItemContent}>
-                                <Text style={styles.listItemTitle}>Phenotype Analysis</Text>
-                                <Text style={styles.listItemValue}>Phenotype Match: High</Text>
+                                <Text style={styles.listItemTitle}>Embedding Similarity</Text>
+                                <Text style={styles.listItemValue}>Match Score: {isHighConfidence ? 'High' : 'Low'}</Text>
                             </View>
-                            <Text style={styles.listItemRightGreen}>92%</Text>
+                            <Text style={styles.listItemRightGreen}>{displayMatchScore}%</Text>
                         </View>
                         <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '92%' }]} />
+                            <View style={[styles.progressBarFill, { width: `${displayMatchScore}%` }]} />
                         </View>
                     </GlassView>
 

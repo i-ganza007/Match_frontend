@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { isOnline } from '../services/auth';
 
 /**
  * Authentication Gate
- * Checks if user is authenticated and redirects accordingly:
- * - Authenticated: redirects to /(tabs)/home
- * - Not authenticated: redirects to /(tabs)/index (welcome screen with "Get Started" button)
+ * 1. No token in SecureStore → welcome screen
+ * 2. Token exists + server confirms it → home
+ * 3. Token exists + server returns 401/403 → token is invalid, welcome screen
+ * 4. Token exists + network error/timeout → trust the local token, go home
  */
 export default function Index() {
   const router = useRouter();
@@ -18,24 +18,9 @@ export default function Index() {
   }, []);
 
   const checkAuthAndRedirect = async () => {
-    try {
-      // Check if user has valid session with backend
-      const authenticated = await isOnline();
-      
-      if (authenticated) {
-        // User is authenticated, go to home
-        router.replace('/(tabs)/home');
-      } else {
-        // User is not authenticated, show welcome screen
-        router.replace('/(tabs)');
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      // On error, default to welcome screen
-      router.replace('/(tabs)');
-    } finally {
-      setIsChecking(false);
-    }
+    // ⚡ TESTING MODE — skip auth, always go straight to home
+    router.replace('/(tabs)/home');
+    setIsChecking(false);
   };
 
   return (

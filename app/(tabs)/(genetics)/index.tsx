@@ -4,6 +4,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../context/ThemeContext';
+import { BUNDLE_VERSION } from '../../../constants/bundleVersion';
 
 const { width } = Dimensions.get('window');
 
@@ -98,7 +99,7 @@ export default function GeneticsIndexScreen() {
             </View>
 
             {/* Bottom hint */}
-            <Text style={styles.hint}>Powered by Siamese Neural Network v2.4</Text>
+            <Text style={styles.hint}>Powered by Siamese Neural Network · {BUNDLE_VERSION}</Text>
         </SafeAreaView>
     );
 }
