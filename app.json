@@ -4,7 +4,15 @@
     "slug": "Match_F",
     "version": "1.0.0",
     "orientation": "portrait",
-
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/470a3568-139c-4a52-8be8-141cc493b60e",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 10000
+    },
     "scheme": "matchf",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,7 +25,13 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.Match_F"
+      "package": "com.anonymous.Match_F",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -57,17 +71,25 @@
       ],
       "expo-asset",
       "expo-localization",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-updates",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Match needs your location to connect you with nearby farmers.",
+          "locationWhenInUsePermission": "Match needs your location to connect you with nearby farmers."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "i-ganza007",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6905b32c-0252-4e75-8611-89a8026fd8a7"
+        "projectId": "470a3568-139c-4a52-8be8-141cc493b60e"
       }
-    },
-    "owner": "bigsteppa"
+    }
   }
 }

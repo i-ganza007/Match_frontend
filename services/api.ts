@@ -22,7 +22,12 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
       console.log('🔑 Added Bearer token to request:', config.url);
     } else {
-      console.log('⚠️ No token found for request:', config.url);
+      // Public routes don't need a token — skip the warning for them
+      const publicRoutes = ['/auth/signup', '/auth/login'];
+      const isPublic = publicRoutes.some(r => config.url?.includes(r));
+      if (!isPublic) {
+        console.log('⚠️ No token found for request:', config.url);
+      }
     }
     
     return config;

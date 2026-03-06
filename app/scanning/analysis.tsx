@@ -53,19 +53,8 @@ export default function AnalysisScreen() {
     const [status, setStatus] = useState('Initializing AI...');
     const [progressText, setProgressText] = useState('0');
     const [hasStarted, setHasStarted] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [debugInfo, setDebugInfo] = useState<string>('');
 
-    // Optional web-only error boundary (React Native has no window)
-    React.useEffect(() => {
-        if (typeof window === 'undefined' || !window.addEventListener) return;
-        const handleError = (e: ErrorEvent) => {
-            console.error('Unhandled error in AnalysisScreen:', e.error);
-            setError(e.error?.message || 'Unknown error occurred');
-        };
-        window.addEventListener('error', handleError);
-        return () => window.removeEventListener('error', handleError);
-    }, []);
 
     // Lifecycle logging
     useEffect(() => {
@@ -76,25 +65,6 @@ export default function AnalysisScreen() {
             console.log('--- AnalysisScreen WILL UNMOUNT ---');
         };
     }, []);
-
-    // If there's an error, show fallback
-    if (error) {
-        console.log('🚨 Showing fallback due to error:', error);
-        setTimeout(() => {
-            router.replace({
-                pathname: '/scanning/result',
-                params: { breed: 'Sahiwal Cow (Error Fallback)', confidence: 85, image: image || '' }
-            } as any);
-        }, 1000);
-        
-        return (
-            <View style={styles.container}>
-                <Text style={{ color: 'white', textAlign: 'center', marginTop: 100 }}>
-                    Error: {error}
-                </Text>
-            </View>
-        );
-    }
 
     const scanLineY = useSharedValue(0);
     const progress = useSharedValue(0);
@@ -148,18 +118,22 @@ export default function AnalysisScreen() {
             progress.value = withTiming(0.7, { duration: 400 });
             setProgressText('70');
             
-            // Use inference with Float32 (MobileNetV2)
-            const logits = await runInferenceWithRetry(imageUri);
-            
+            // runInferenceWithRetry returns { embedding, debug }
+            // For the breed model the "embedding" is actually the 14-class output vector
+            const { embedding: logits, debug: inferDebug } = await runInferenceWithRetry(imageUri);
+            console.log('📊 Breed inference debug:', JSON.stringify(inferDebug));
+
             if (!logits || logits.length === 0) {
                 throw new Error('Invalid inference result: empty logits array');
             }
-            
-            // Find max probability
-            const logitsArray = Array.from(logits).map(v => Number(v));
-            const maxValue = Math.max(...logitsArray);
-            const maxIndex = logitsArray.indexOf(maxValue);
-            
+
+            // Find max probability with a for-loop (Math.max(...spread) crashes for large arrays)
+            let maxValue = -Infinity;
+            let maxIndex = 0;
+            for (let i = 0; i < logits.length; i++) {
+                if (logits[i] > maxValue) { maxValue = logits[i]; maxIndex = i; }
+            }
+
             // Convert to confidence percentage
             const confidence = Math.min(100, Math.max(0, maxValue * 100));
             
@@ -181,37 +155,12 @@ export default function AnalysisScreen() {
             }, 1000);
 
         } catch (e: any) {
-            console.error('❌ TFLite inference error:', e);
-            console.log('🔄 Falling back to simulation...');
-            console.log('Error details:', e.message);
-            console.log('Error stack:', e.stack);
-            
-            setDebugInfo(`ERROR: ${e.message}`);
-            setStatus('Error: ' + e.message.substring(0, 30));
-            
-            // Fallback to simulation if TFLite fails
-            const breeds = ['Sahiwal Cow', 'Jersey Cow', 'Fresian Cow', 'Indigenous Ankole Cow'];
-            const selectedBreed = breeds[Math.floor(Math.random() * breeds.length)];
-            const confidence = Math.floor(Math.random() * 20) + 75; // 75-95%
-            
-            setStatus('Using Fallback Analysis...');
-            setProgressText('99');
-            
-            // Show which error caused fallback
-            const errorMsg = e.message || 'Unknown error';
-            console.log('🚨 FALLBACK REASON:', errorMsg);
-            
-            setTimeout(() => {
-                console.log('🎯 Fallback Result:', selectedBreed, confidence + '%');
-                router.replace({
-                    pathname: '/scanning/result',
-                    params: { 
-                        breed: selectedBreed + ' (Fallback: ' + errorMsg.substring(0, 20) + ')', 
-                        confidence, 
-                        image: imageUri || '' 
-                    }
-                } as any);
-            }, 1000);
+            console.error('❌ TFLite inference error:', e.message);
+            console.error('Stack:', e.stack);
+            const errorMsg: string = e.message ?? 'Unknown inference error';
+            setDebugInfo(`ERROR: ${errorMsg}`);
+            setStatus('Failed: ' + errorMsg.substring(0, 40));
+            setHasStarted(false); // allow retry
         }
     };
 
@@ -220,29 +169,6 @@ export default function AnalysisScreen() {
         const t = setTimeout(() => {
             if (!imageUri || typeof imageUri !== 'string' || imageUri.length === 0) {
                 console.warn('No image param on analysis screen – redirecting back');
-                // #region agent log
-                fetch('http://127.0.0.1:7640/ingest/3532a72e-144a-492b-81c9-e1e0041018c5', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Debug-Session-Id': '7fc011',
-                    },
-                    body: JSON.stringify({
-                        sessionId: '7fc011',
-                        runId: 'pre-fix-redirect',
-                        hypothesisId: 'H1',
-                        location: 'analysis.tsx:redirectEffect',
-                        message: 'Redirecting due to missing/invalid imageUri',
-                        data: {
-                            rawImageParam: image,
-                            imageUri,
-                            typeRawImage: typeof image,
-                            typeImageUri: typeof imageUri,
-                        },
-                        timestamp: Date.now(),
-                    }),
-                }).catch(() => {});
-                // #endregion agent log
                 router.replace('/(tabs)/breed-camera' as any);
             }
         }, 100);
@@ -254,31 +180,7 @@ export default function AnalysisScreen() {
         if (!imageUri || typeof imageUri !== 'string') return;
 
         if (autoStartParam === 'true' && !hasStarted && isReady) {
-            console.log('🚀 Model ready, auto-starting inference immediately...');
-            // #region agent log
-            fetch('http://127.0.0.1:7640/ingest/3532a72e-144a-492b-81c9-e1e0041018c5', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Debug-Session-Id': '7fc011',
-                },
-                body: JSON.stringify({
-                    sessionId: '7fc011',
-                    runId: 'pre-fix-redirect',
-                    hypothesisId: 'H2',
-                    location: 'analysis.tsx:autoStartEffect',
-                    message: 'Auto-start conditions met',
-                    data: {
-                        imageUri,
-                        autoStartParam,
-                        hasStarted,
-                        isReady,
-                        modelState: state,
-                    },
-                    timestamp: Date.now(),
-                }),
-            }).catch(() => {});
-            // #endregion agent log
+            console.log('Model ready, auto-starting inference immediately...');
             const timer = setTimeout(() => {
                 console.log('🎬 Triggering runInference now...');
                 runInference();

@@ -1,11 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signup, SignupData } from '../services/auth';
+import { requestLocationPermission, hasLocationPermission } from '../services/location';
+import { BUNDLE_VERSION } from '../constants/bundleVersion';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +25,33 @@ export default function SignupScreen() {
     const [cell, setCell] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [locationGranted, setLocationGranted] = useState(false);
+
+    // Request location permission as soon as the signup screen opens
+    useEffect(() => {
+        (async () => {
+            // Silent check first — no dialog if already granted
+            const alreadyGranted = await hasLocationPermission();
+            if (alreadyGranted) {
+                setLocationGranted(true);
+                return;
+            }
+            // Not granted yet — ask
+            const result = await requestLocationPermission();
+            if (result.granted) {
+                setLocationGranted(true);
+            } else if (!result.canAskAgain) {
+                Alert.alert(
+                    'Location Required',
+                    'Match needs your location to connect you with nearby farmers. Please enable it in your device Settings.',
+                    [
+                        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                        { text: 'Cancel', style: 'cancel' },
+                    ],
+                );
+            }
+        })();
+    }, []);
 
     // Password strength visual logic
     const getPasswordStrength = (pass: string) => {
@@ -49,6 +78,27 @@ export default function SignupScreen() {
         if (password.length < 6) {
             Alert.alert('Error', 'Password must be at least 6 characters');
             return;
+        }
+
+        // Guard: if permission still not granted, re-request before the API call
+        if (!locationGranted) {
+            const result = await requestLocationPermission();
+            if (!result.granted) {
+                if (!result.canAskAgain) {
+                    Alert.alert(
+                        'Location Required',
+                        'Please enable location access for Match in your device Settings and try again.',
+                        [
+                            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                            { text: 'Cancel', style: 'cancel' },
+                        ],
+                    );
+                } else {
+                    Alert.alert('Location Required', 'Please allow location access to sign up.');
+                }
+                return;
+            }
+            setLocationGranted(true);
         }
 
         setLoading(true);
@@ -275,6 +325,11 @@ export default function SignupScreen() {
                         )}
                     </TouchableOpacity>
 
+                    {/* ── Debug stamp ── */}
+                    <Text style={styles.debugStamp}>
+                        {BUNDLE_VERSION} · loc:{locationGranted ? '✅' : '❌'}
+                    </Text>
+
                 </ScrollView>
             </KeyboardAvoidingView>
         </ImageBackground>
@@ -463,5 +518,13 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: {
         opacity: 0.6,
+    },
+    debugStamp: {
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.35)',
+        fontSize: 10,
+        fontFamily: 'monospace',
+        marginBottom: 12,
+        letterSpacing: 0.5,
     },
 });

@@ -9,26 +9,7 @@ const HAS_LOGGED_IN_KEY = 'has_logged_in_before';
 /**
  * Store auth token securely
  */
-export const storeAuthToken = async (token: string): Promise<void> => {
-  try {
-    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-  } catch (error) {
-    console.error('Error storing auth token:', error);
-    throw error;
-  }
-};
 
-/**
- * Get stored auth token
- */
-export const getAuthToken = async (): Promise<string | null> => {
-  try {
-    return await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-  } catch (error) {
-    console.error('Error retrieving auth token:', error);
-    return null;
-  }
-};
 
 /**
  * Store auth token securely

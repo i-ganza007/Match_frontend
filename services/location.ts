@@ -5,21 +5,28 @@ export interface LocationCoordinates {
   longitude: number;
 }
 
+export type PermissionResult =
+  | { granted: true }
+  | { granted: false; canAskAgain: boolean };
+
 /**
- * Request location permission
+ * Request location permission.
+ * Returns whether it was granted and — if not — whether the OS will show the
+ * dialog again or if the user needs to go to Settings.
  */
-export const requestLocationPermission = async (): Promise<boolean> => {
+export const requestLocationPermission = async (): Promise<PermissionResult> => {
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    return status === 'granted';
+    const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+    if (status === 'granted') return { granted: true };
+    return { granted: false, canAskAgain };
   } catch (error) {
     console.error('Error requesting location permission:', error);
-    return false;
+    return { granted: false, canAskAgain: false };
   }
 };
 
 /**
- * Check if location permission is granted
+ * Check current permission status without triggering a dialog.
  */
 export const hasLocationPermission = async (): Promise<boolean> => {
   try {
@@ -36,13 +43,11 @@ export const hasLocationPermission = async (): Promise<boolean> => {
  */
 export const getCurrentLocation = async (): Promise<LocationCoordinates | null> => {
   try {
-    const hasPermission = await hasLocationPermission();
-    
-    if (!hasPermission) {
-      const permissionGranted = await requestLocationPermission();
-      if (!permissionGranted) {
-        throw new Error('Location permission not granted');
-      }
+    const alreadyGranted = await hasLocationPermission();
+
+    if (!alreadyGranted) {
+      const result = await requestLocationPermission();
+      if (!result.granted) return null;
     }
 
     const location = await Location.getCurrentPositionAsync({
