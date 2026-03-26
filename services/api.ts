@@ -37,18 +37,15 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - Handle authentication errors
+// Response interceptor — just propagate errors.
+// We intentionally do NOT auto-logout on 401. The Render free-tier backend
+// regenerates its JWT secret on every cold-start, so a 401 does NOT mean the
+// user's credentials are wrong — it just means the server restarted. Each
+// feature handles 401 on its own (show error / retry). The user must only
+// ever be signed out by explicitly pressing "Log Out".
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      console.log('❌ 401 Unauthorized - Clearing auth data');
-      // Session expired or invalid - clear local auth
-      const { clearAuthData } = await import('./secureStorage');
-      await clearAuthData();
-    }
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error),
 );
 
 export default api;

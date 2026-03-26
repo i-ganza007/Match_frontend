@@ -103,26 +103,6 @@ export default function Home() {
                     </TouchableOpacity>
                 </View>
 
-                {/* 2. Species Quick-Filter */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-                    <View style={[styles.filterPill, styles.filterPillActive]}>
-                        <MaterialIcons name="pets" size={18} color="#FFD700" />
-                        <Text style={styles.filterTextActive}>{t('camera.species.cow')}</Text>
-                    </View>
-                    <GlassView style={styles.filterPill}>
-                        <MaterialCommunityIcons name="egg-outline" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>{t('camera.species.goat')}</Text>
-                    </GlassView>
-                    <GlassView style={styles.filterPill}>
-                        <MaterialCommunityIcons name="grass" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>{t('camera.species.sheep')}</Text>
-                    </GlassView>
-                    <GlassView style={styles.filterPill}>
-                        <MaterialIcons name="auto-awesome" size={18} color="rgba(255,255,255,0.4)" />
-                        <Text style={styles.filterText}>{t('camera.species.pig')}</Text>
-                    </GlassView>
-                </ScrollView>
-
                 {/* 3. Featured Recommendation */}
                 <View style={styles.section}>
                     <View style={styles.featuredCard}>
@@ -177,14 +157,16 @@ export default function Home() {
 
                 {/* 4. Stats Row */}
                 <View style={styles.statsRow}>
-                    <GlassView style={styles.statCard}>
-                        <MaterialIcons name="grid-view" size={60} color="rgba(255,255,255,0.05)" style={styles.statIconBg} />
-                        <Text style={styles.statCardLabel}>{t('home.yourHerd', 'Your Herd')}</Text>
-                        <View style={styles.statCardRow}>
-                            <Text style={styles.statCardValue}>12</Text>
-                            <Text style={styles.statCardTrend}>+2 {t('home.newAnimals', 'New')}</Text>
-                        </View>
-                    </GlassView>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/my-herd' as any)} activeOpacity={0.85}>
+                        <GlassView style={styles.statCard}>
+                            <MaterialIcons name="grid-view" size={60} color="rgba(255,255,255,0.05)" style={styles.statIconBg} />
+                            <Text style={styles.statCardLabel}>{t('home.yourHerd', 'Your Herd')}</Text>
+                            <View style={styles.statCardRow}>
+                                <Text style={styles.statCardValue}>12</Text>
+                                <Text style={styles.statCardTrend}>+2 {t('home.newAnimals', 'New')}</Text>
+                            </View>
+                        </GlassView>
+                    </TouchableOpacity>
                     <GlassView style={styles.statCard}>
                         <MaterialIcons name="analytics" size={60} color="rgba(255,255,255,0.05)" style={styles.statIconBg} />
                         <Text style={styles.statCardLabel}>{t('home.recentMatches', 'Recent Matches')}</Text>
@@ -232,6 +214,24 @@ export default function Home() {
                                 </View>
                             </GlassView>
                         </GlassView>
+                    </TouchableOpacity>
+
+                    {/* Quick Matches CTA */}
+                    <TouchableOpacity
+                        style={styles.quickMatchBanner}
+                        onPress={() => router.push('/(tabs)/quick-matches-map' as any)}
+                        activeOpacity={0.85}
+                    >
+                        <View style={styles.quickMatchIconWrap}>
+                            <MaterialIcons name="my-location" size={20} color="#fff" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.quickMatchTitle}>Find Quick Matches Nearby</Text>
+                            <Text style={styles.quickMatchSub}>ML-scored breeding partners · GPS-powered</Text>
+                        </View>
+                        <View style={styles.quickMatchArrow}>
+                            <MaterialIcons name="arrow-forward" size={16} color="#fff" />
+                        </View>
                     </TouchableOpacity>
                 </View>
 
@@ -399,34 +399,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
         color: 'rgba(255, 255, 255, 0.4)',
-    },
-    filterScroll: {
-        paddingHorizontal: 20,
-        gap: 12,
-        paddingBottom: 24,
-    },
-    filterPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 999,
-        gap: 8,
-    },
-    filterPillActive: {
-        backgroundColor: 'rgba(17, 212, 30, 0.08)',
-        borderColor: 'rgba(17, 212, 30, 0.3)',
-        borderWidth: 1,
-    },
-    filterTextActive: {
-        color: '#11d41e',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    filterText: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 14,
-        fontWeight: '500',
     },
     section: {
         paddingHorizontal: 20,
@@ -671,6 +643,44 @@ const styles = StyleSheet.create({
         color: 'rgba(255, 255, 255, 0.6)',
         marginTop: 2,
     },
+    quickMatchBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        marginTop: 12,
+        padding: 14,
+        borderRadius: 16,
+        backgroundColor: 'rgba(236,91,19,0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(236,91,19,0.35)',
+    },
+    quickMatchIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#ec5b13',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    quickMatchTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#f1f5f9',
+    },
+    quickMatchSub: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.5)',
+        marginTop: 2,
+    },
+    quickMatchArrow: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#ec5b13',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
     networkScroll: {
         paddingRight: 20,
         gap: 16,

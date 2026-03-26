@@ -1,31 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
 
-/**
- * Authentication Gate
- * 1. No token in SecureStore → welcome screen
- * 2. Token exists + server confirms it → home
- * 3. Token exists + server returns 401/403 → token is invalid, welcome screen
- * 4. Token exists + network error/timeout → trust the local token, go home
- */
 export default function Index() {
   const router = useRouter();
-  const [isChecking, setIsChecking] = useState(true);
+  const { user, token, isLoaded } = useAuth();
 
   useEffect(() => {
-    checkAuthAndRedirect();
-  }, []);
-
-  const checkAuthAndRedirect = async () => {
-    // ⚡ TESTING MODE — skip auth, always go straight to home
-    router.replace('/(tabs)/home');
-    setIsChecking(false);
-  };
+    if (!isLoaded) return;
+    // Consider the session active if EITHER the user object or token is present.
+    // Never send to /login unless both are absent (i.e. user explicitly signed out).
+    if (user || token) {
+      router.replace('/(tabs)/home');
+    } else {
+      router.replace('/login');
+    }
+  }, [isLoaded, user, token]);
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#007AFF" />
+      <ActivityIndicator size="large" color="#11d41e" />
     </View>
   );
 }
@@ -35,6 +30,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#081209',
   },
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions, StatusBar, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getScanImageUri } from '../../services/scanStore';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -34,21 +35,28 @@ const TraitBadge = ({ icon, label, type = 'default' }: { icon: string, label: st
 
 export default function ResultScreen() {
     const router = useRouter();
-    const { breed, confidence, image } = useLocalSearchParams();
+    const { breed, confidence, animalType, species } = useLocalSearchParams();
 
     const displayBreed = (breed as string) || 'Identifying...';
     const displayConfidence = parseInt(confidence as string) || 0;
-    const displayImage = (image as string) || 'https://images.unsplash.com/photo-1524024973431-2ad916746881?q=80&w=1000&auto=format&fit=crop';
+    // Read from scanStore — avoids expo-router file:// URI encoding issues
+    const displayImage = getScanImageUri();
+    const detectedType = (animalType as string) || '';
+    const detectedSpecies = (species as string) || '';
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
             {/* Background Image with Overlay */}
-            <Image
-                source={{ uri: displayImage }}
-                style={StyleSheet.absoluteFill}
-            />
+            {displayImage ? (
+                <Image
+                    source={{ uri: displayImage }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    cachePolicy="none"
+                />
+            ) : null}
             <LinearGradient
                 colors={['rgba(8, 18, 9, 0.4)', 'rgba(8, 18, 9, 0.95)']}
                 style={StyleSheet.absoluteFill}
@@ -115,7 +123,18 @@ export default function ResultScreen() {
                         <TraitBadge icon="verified" label="Premium Pedigree" type="premium" />
                     </View>
 
-                    <TouchableOpacity style={styles.saveBtn} onPress={() => router.replace('/(tabs)/home')}>
+                    <TouchableOpacity
+                        style={styles.saveBtn}
+                        onPress={() => router.replace({
+                            pathname: '/(tabs)/register-animal',
+                            params: {
+                                initialType: detectedType,
+                                initialSpecies: detectedSpecies,
+                                initialImage: displayImage,
+                                initialConfidence: String(displayConfidence),
+                            },
+                        } as any)}
+                    >
                         <Text style={styles.saveBtnText}>CONFIRM & SAVE TO HERD</Text>
                         <Ionicons name="arrow-forward" size={18} color="#000" />
                     </TouchableOpacity>

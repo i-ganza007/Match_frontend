@@ -130,3 +130,10 @@ export const getUsersWithLocation = async (): Promise<User[]> => {
   const users = await getAllUsers();
   return users.filter((u) => u.latitude != null && u.longitude != null);
 };
+
+export const getSingleUser = async (id: string): Promise<User> => {
+  const response = await api.get<User>(`/users/${id}`);
+  const user = response.data as any;
+  const { latitude, longitude } = parseLocation(user);
+  return { ...user, latitude, longitude } as User;
+};

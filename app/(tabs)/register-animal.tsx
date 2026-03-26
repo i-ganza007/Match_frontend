@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -11,12 +11,45 @@ import {
     Alert,
     ActivityIndicator,
     Pressable,
+    Modal,
+    Platform,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { createAnimal, AnimalType, Gender } from '../../services/animals';
+import { createAnimal, AnimalType, Gender, AnimalSpecies, SPECIES_BY_TYPE } from '../../services/animals';
+import { useMLModel } from '../../hooks/useMLModel.native';
+
+// Metro needs a static require() at module level to bundle the .tflite asset
+const MODEL_ASSET = require('../../assets/models/livestock_mobile_vnet_final.tflite');
+
+// Labels in the same order as model training output
+const BREED_LABELS = [
+    'brown_swiss_cow', 'dorper_sheep', 'duroc_pig', 'fresian_cow', 'girolando_cow',
+    'indigenous_ankole_cow', 'indigenous_goat', 'indigenous_pig', 'jersey_cow',
+    'landrace_pig', 'large_white_pig', 'merino_sheep', 'pietrain_pig', 'sahiwal_cow',
+] as const;
+type BreedLabel = typeof BREED_LABELS[number];
+
+// Map model output labels to AnimalSpecies + AnimalType
+const LABEL_MAP: Record<BreedLabel, { species: AnimalSpecies; type: AnimalType }> = {
+    brown_swiss_cow:       { species: 'BROWN_SWISS_COW',  type: 'COW'   },
+    dorper_sheep:          { species: 'MERINO_SHEEP',      type: 'SHEEP' }, // closest in schema
+    duroc_pig:             { species: 'DUROC_PIG',         type: 'PIG'   },
+    fresian_cow:           { species: 'FREISIAN_COW',      type: 'COW'   },
+    girolando_cow:         { species: 'GIROLANDO_COW',     type: 'COW'   },
+    indigenous_ankole_cow: { species: 'ANKOLE_COW',        type: 'COW'   },
+    indigenous_goat:       { species: 'LOCAL_GOAT',        type: 'GOAT'  },
+    indigenous_pig:        { species: 'DUROC_PIG',         type: 'PIG'   },
+    jersey_cow:            { species: 'JERSEY_COW',        type: 'COW'   },
+    landrace_pig:          { species: 'LARGE_WHITE_PIG',   type: 'PIG'   },
+    large_white_pig:       { species: 'LARGE_WHITE_PIG',   type: 'PIG'   },
+    merino_sheep:          { species: 'MERINO_SHEEP',      type: 'SHEEP' },
+    pietrain_pig:          { species: 'LARGE_WHITE_PIG',   type: 'PIG'   },
+    sahiwal_cow:           { species: 'HOLSTEIN_COW',      type: 'COW'   }, // closest in schema
+};
 
 const PRIMARY = '#11d41e';
 const BG_DARK = '#0a0f0a';
@@ -37,30 +70,162 @@ const FieldLabel = ({ text }: { text: string }) => (
     <Text style={styles.fieldLabel}>{text}</Text>
 );
 
-// Map display labels to backend AnimalType enum values
 const ANIMAL_TYPES: { label: string; value: AnimalType }[] = [
-    { label: 'Bovine',  value: 'COW'   },
-    { label: 'Caprine', value: 'GOAT'  },
-    { label: 'Ovine',   value: 'SHEEP' },
-    { label: 'Porcine', value: 'PIG'   },
+    { label: 'Cow',   value: 'COW'   },
+    { label: 'Goat',  value: 'GOAT'  },
+    { label: 'Sheep', value: 'SHEEP' },
+    { label: 'Pig',   value: 'PIG'   },
 ];
+
+// Gender-specific breeding age windows (months) — used to auto-set recommendable
+const BREEDING_AGE: Record<AnimalType, { female: { min: number; max: number }; male: { min: number; max: number } }> = {
+    COW:   { female: { min: 15, max: 18 }, male: { min: 12, max: 15 } },
+    PIG:   { female: { min: 7,  max: 8  }, male: { min: 8,  max: 10 } },
+    SHEEP: { female: { min: 10, max: 12 }, male: { min: 5,  max: 7  } },
+    GOAT:  { female: { min: 10, max: 12 }, male: { min: 6,  max: 8  } },
+};
+
+function calcAge(dateStr: string): { totalMonths: number; label: string } | null {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    const totalMonths =
+        (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    if (totalMonths < 0) return null;
+    const y = Math.floor(totalMonths / 12);
+    const m = totalMonths % 12;
+    const label = y > 0 ? `${y}y${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+    return { totalMonths, label };
+}
 
 export default function RegisterAnimal() {
     const router = useRouter();
+    const params = useLocalSearchParams<{
+        initialType?: string;
+        initialSpecies?: string;
+        initialImage?: string;
+        initialConfidence?: string;
+    }>();
+
+    // Resolve initial type/species from scanner params (if coming from breed-camera flow)
+    const initialTypeOption = ANIMAL_TYPES.find(t => t.value === params.initialType) ?? ANIMAL_TYPES[0];
+    const initialSpeciesOptions = SPECIES_BY_TYPE[initialTypeOption.value];
+    const initialSpeciesOption = initialSpeciesOptions.find(s => s.value === params.initialSpecies)
+        ?? initialSpeciesOptions[0];
+    const fromScanner = !!(params.initialType && params.initialSpecies);
 
     // Form state
     const [sex, setSex] = useState<'male' | 'female'>('male');
     const [recommendable, setRecommendable] = useState(true);
-    const [animalType, setAnimalType] = useState<{ label: string; value: AnimalType }>(ANIMAL_TYPES[0]);
+    const [animalType, setAnimalType] = useState<{ label: string; value: AnimalType }>(initialTypeOption);
     const [name, setName] = useState('');
-    const [breed, setBreed] = useState('');
     const [birthDate, setBirthDate] = useState('');
     const [motherId, setMotherId] = useState('');
     const [fatherId, setFatherId] = useState('');
     const [typeOpen, setTypeOpen] = useState(false);
 
-    // Photo state
-    const [photo, setPhoto] = useState<{ uri: string; name: string; type: string } | null>(null);
+    // Date picker state
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [pickerDate, setPickerDate] = useState<Date>(new Date());
+
+    const onDateChange = (event: DateTimePickerEvent, selected?: Date) => {
+        // Android: dismiss on any event; iOS: keep open until user taps Done
+        if (Platform.OS === 'android') setShowDatePicker(false);
+        if (event.type === 'set' && selected) {
+            setPickerDate(selected);
+            const iso = selected.toISOString().split('T')[0]; // YYYY-MM-DD
+            setBirthDate(iso);
+        }
+    };
+
+    const formatDisplayDate = (iso: string) => {
+        if (!iso) return null;
+        const d = new Date(iso + 'T00:00:00');
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    // Species — filtered list resets when animal type changes
+    const speciesOptions = SPECIES_BY_TYPE[animalType.value];
+    const [species, setSpecies] = useState<{ label: string; value: AnimalSpecies }>(initialSpeciesOption);
+    const [speciesOpen, setSpeciesOpen] = useState(false);
+
+    // Photo state — pre-fill from scanner if available
+    const [photo, setPhoto] = useState<{ uri: string; name: string; type: string } | null>(
+        params.initialImage && params.initialImage.startsWith('file')
+            ? { uri: params.initialImage, name: 'scan-image.jpg', type: 'image/jpeg' }
+            : null,
+    );
+
+    // Breed classifier (model loads on mount; Expo Go will fail gracefully)
+    const { runInferenceWithRetry, isReady: modelReady } = useMLModel(MODEL_ASSET);
+    const [scanning, setScanning] = useState(false);
+    const [breedConfidence, setBreedConfidence] = useState(
+        fromScanner && params.initialConfidence
+            ? parseFloat(params.initialConfidence) / 100
+            : 1.0,
+    );
+    // true once the model has successfully classified a photo (or came from scanner)
+    const [inferredByModel, setInferredByModel] = useState(fromScanner);
+    // true when the user explicitly wants to override the AI result
+    const [speciesOverridden, setSpeciesOverridden] = useState(false);
+    // URI waiting to be inferred once model becomes ready
+    const pendingUriRef = useRef<string | null>(null);
+
+    const runBreedInference = async (uri: string) => {
+        setScanning(true);
+        try {
+            const { embedding: logits } = await runInferenceWithRetry(uri);
+            console.log(`[BreedDetect] Output dim: ${logits.length}, expected: ${BREED_LABELS.length}`);
+
+            if (logits.length !== BREED_LABELS.length) {
+                console.warn(`[BreedDetect] Model output dim (${logits.length}) ≠ BREED_LABELS (${BREED_LABELS.length}). Cannot classify breed.`);
+            } else {
+                let maxLogit = -Infinity;
+                for (let i = 0; i < logits.length; i++) if (logits[i] > maxLogit) maxLogit = logits[i];
+                const exps = Array.from(logits).map(l => Math.exp(l - maxLogit));
+                const sumExp = exps.reduce((a, b) => a + b, 0);
+                let maxProb = -Infinity, maxIndex = 0;
+                for (let i = 0; i < exps.length; i++) {
+                    const p = exps[i] / sumExp;
+                    if (p > maxProb) { maxProb = p; maxIndex = i; }
+                }
+                const rawLabel = BREED_LABELS[maxIndex] as BreedLabel;
+                console.log(`[BreedDetect] Top label: ${rawLabel} (${(maxProb * 100).toFixed(1)}%)`);
+                const mapped = LABEL_MAP[rawLabel];
+                if (mapped) {
+                    const newType = ANIMAL_TYPES.find(t => t.value === mapped.type)!;
+                    const newSpecies = SPECIES_BY_TYPE[mapped.type].find(s => s.value === mapped.species)
+                        ?? SPECIES_BY_TYPE[mapped.type][0];
+                    setAnimalType(newType);
+                    setSpecies(newSpecies);
+                    setBreedConfidence(maxProb);
+                    setInferredByModel(true);
+                    setSpeciesOverridden(false);
+                }
+            }
+        } catch (e) {
+            console.warn('[BreedDetect] Inference failed:', e);
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    // If a photo was picked before the model finished loading, run inference now
+    useEffect(() => {
+        if (modelReady && pendingUriRef.current) {
+            const uri = pendingUriRef.current;
+            pendingUriRef.current = null;
+            runBreedInference(uri);
+        }
+    }, [modelReady]);
+
+    // Age & auto-recommendable (derived from birthDate, animalType, and sex)
+    const ageInfo = birthDate.trim() ? calcAge(birthDate.trim()) : null;
+    const breedingRange = BREEDING_AGE[animalType.value]?.[sex as 'female' | 'male'] ?? null;
+    const autoRecommendable: boolean | null = ageInfo && breedingRange
+        ? ageInfo.totalMonths >= breedingRange.min
+        : null; // null = no birth date → use manual toggle
 
     // Submission state
     const [loading, setLoading] = useState(false);
@@ -80,9 +245,18 @@ export default function RegisterAnimal() {
         if (!result.canceled && result.assets[0]) {
             const asset = result.assets[0];
             const uri = asset.uri;
-            const name = uri.split('/').pop() ?? 'photo.jpg';
-            const type = asset.mimeType ?? 'image/jpeg';
-            setPhoto({ uri, name, type });
+            const photoName = uri.split('/').pop() ?? 'photo.jpg';
+            const photoType = asset.mimeType ?? 'image/jpeg';
+            setPhoto({ uri, name: photoName, type: photoType });
+
+            // Run breed inference immediately if model is ready; otherwise queue it
+            if (modelReady) {
+                runBreedInference(uri);
+            } else {
+                // Model still loading — store URI and inference will run via useEffect
+                pendingUriRef.current = uri;
+                setScanning(true); // show spinner while waiting for model
+            }
         }
     };
 
@@ -96,22 +270,38 @@ export default function RegisterAnimal() {
         try {
             await createAnimal(
                 {
-                    name:             name.trim() || undefined,
+                    name:             name.trim(), // always send — backend @IsString() is not @IsOptional()
                     sex:              sex.toUpperCase() as Gender,
                     type:             animalType.value,
-                    specie:           breed.trim() || undefined,
+                    specie:           species.value,
+                    status:           'ALIVE',
+                    breed_confidence: breedConfidence,
                     birthDate:        birthDate.trim() || undefined,
                     motherId:         motherId.trim() || undefined,
                     fatherId:         fatherId.trim() || undefined,
+                    // recommendable is computed server-side from type + sex + birthDate
                 },
                 photo ?? undefined,
             );
             Alert.alert('Success', 'Animal registered successfully!', [
-                { text: 'OK', onPress: () => router.back() },
+                { text: 'OK', onPress: () => router.replace('/(tabs)/my-herd' as any) },
             ]);
         } catch (error: any) {
-            const message = error.response?.data?.message ?? error.message ?? 'Failed to register animal.';
-            Alert.alert('Error', message);
+            const status = error.response?.status ?? 'network';
+            const rawData = error.response?.data;
+            console.error('[RegisterAnimal] Submit failed — status:', status);
+            console.error('[RegisterAnimal] Server response:', JSON.stringify(rawData, null, 2));
+            const msgs = Array.isArray(rawData?.message)
+                ? rawData.message
+                : rawData?.message
+                    ? [rawData.message]
+                    : [];
+            const detail = msgs.length ? msgs.join('\n') : (error.message ?? 'Failed to register animal.');
+            Alert.alert(
+                `Error (${status})`,
+                detail,
+                [{ text: 'OK' }],
+            );
         } finally {
             setLoading(false);
         }
@@ -121,7 +311,7 @@ export default function RegisterAnimal() {
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Top App Bar */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.navigate('/(tabs)/home' as any)}>
                     <MaterialIcons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Register Animal</Text>
@@ -147,8 +337,17 @@ export default function RegisterAnimal() {
                             </>
                         )}
                         <View style={styles.uploadIconArea}>
-                            <MaterialIcons name="add-a-photo" size={40} color={PRIMARY} />
-                            <Text style={styles.uploadText}>{photo ? 'Change Photo' : 'Add Animal Photo'}</Text>
+                            {scanning ? (
+                                <>
+                                    <ActivityIndicator size="large" color={PRIMARY} />
+                                    <Text style={styles.uploadText}>Detecting breed...</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <MaterialIcons name="add-a-photo" size={40} color={PRIMARY} />
+                                    <Text style={styles.uploadText}>{photo ? 'Change Photo' : 'Add Animal Photo'}</Text>
+                                </>
+                            )}
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -196,6 +395,7 @@ export default function RegisterAnimal() {
                                                     ]}
                                                     onPress={() => {
                                                         setAnimalType(t);
+                                                        setSpecies(SPECIES_BY_TYPE[t.value][0]);
                                                         setTypeOpen(false);
                                                     }}
                                                 >
@@ -243,39 +443,168 @@ export default function RegisterAnimal() {
                         {/* Section: Genetic Metadata */}
                         <View style={styles.sectionRow}>
                             <Text style={styles.sectionLabel}>GENETIC METADATA</Text>
-                            <View style={styles.confidenceBadge}>
-                                <MaterialIcons name="verified" size={12} color={PRIMARY} />
-                                <Text style={styles.confidenceText}>98% Confidence</Text>
-                            </View>
+                            {inferredByModel && !speciesOverridden && !scanning && (
+                                <View style={styles.confidenceBadge}>
+                                    <MaterialIcons name="verified" size={12} color={PRIMARY} />
+                                    <Text style={styles.confidenceText}>AI Detected</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.sectionContent}>
-                            {/* Breed Search */}
-                            <View style={styles.fieldGroup}>
+                            {/* Species — AI badge or manual dropdown */}
+                            <View style={[styles.fieldGroup, { zIndex: 10 }]}>
                                 <FieldLabel text="Specie / Breed" />
-                                <View style={styles.searchInputWrapper}>
-                                    <MaterialIcons name="search" size={20} color={SLATE_500} style={styles.searchIcon} />
-                                    <TextInput
-                                        style={[styles.textInput, styles.searchTextInput]}
-                                        placeholder="Search Breed (e.g. Holstein)"
-                                        placeholderTextColor={SLATE_500}
-                                        value={breed}
-                                        onChangeText={setBreed}
-                                        selectionColor={PRIMARY}
-                                    />
-                                </View>
+
+                                {/* Scanning placeholder */}
+                                {scanning && (
+                                    <View style={styles.aiBadge}>
+                                        <ActivityIndicator size="small" color={PRIMARY} />
+                                        <Text style={styles.aiBadgeText}>Detecting breed from photo...</Text>
+                                    </View>
+                                )}
+
+                                {/* AI result badge (photo uploaded + model ran + not overridden) */}
+                                {!scanning && inferredByModel && !speciesOverridden && (
+                                    <View style={styles.aiResultRow}>
+                                        <View style={styles.aiBadge}>
+                                            <MaterialIcons name="auto-awesome" size={14} color={PRIMARY} />
+                                            <Text style={styles.aiBadgeText}>
+                                                {species.label} · {(breedConfidence * 100).toFixed(0)}% confidence
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSpeciesOverridden(true);
+                                                setBreedConfidence(1.0);
+                                            }}
+                                            style={styles.overrideBtn}
+                                        >
+                                            <Text style={styles.overrideBtnText}>Override</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {/* Manual dropdown (no photo, or model didn't run, or user overrode) */}
+                                {!scanning && (!inferredByModel || speciesOverridden) && (
+                                    <>
+                                        <TouchableOpacity
+                                            style={styles.selectInput}
+                                            onPress={() => setSpeciesOpen(!speciesOpen)}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Text style={styles.selectText}>{species.label}</Text>
+                                            <MaterialIcons name="keyboard-arrow-down" size={20} color={SLATE_400} />
+                                        </TouchableOpacity>
+                                        {speciesOpen && (
+                                            <View style={[styles.dropdown, { top: 54 }]}>
+                                                {speciesOptions.map((s) => (
+                                                    <TouchableOpacity
+                                                        key={s.value}
+                                                        style={[
+                                                            styles.dropdownItem,
+                                                            species.value === s.value && styles.dropdownItemActive,
+                                                        ]}
+                                                        onPress={() => {
+                                                            setSpecies(s);
+                                                            setSpeciesOpen(false);
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.dropdownItemText,
+                                                                species.value === s.value && styles.dropdownItemTextActive,
+                                                            ]}
+                                                        >
+                                                            {s.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+                                    </>
+                                )}
                             </View>
 
                             {/* Birth Date */}
                             <View style={styles.fieldGroup}>
                                 <FieldLabel text="Birth Date" />
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="YYYY-MM-DD"
-                                    placeholderTextColor={SLATE_500}
-                                    value={birthDate}
-                                    onChangeText={setBirthDate}
-                                    selectionColor={PRIMARY}
-                                />
+                                <TouchableOpacity
+                                    style={styles.dateBtn}
+                                    onPress={() => setShowDatePicker(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <MaterialIcons name="calendar-today" size={18} color={birthDate ? PRIMARY : SLATE_500} />
+                                    <Text style={[styles.dateBtnText, !birthDate && styles.dateBtnPlaceholder]}>
+                                        {birthDate ? formatDisplayDate(birthDate) : 'Select birth date'}
+                                    </Text>
+                                    {birthDate && (
+                                        <TouchableOpacity
+                                            onPress={() => setBirthDate('')}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            <MaterialIcons name="close" size={16} color={SLATE_500} />
+                                        </TouchableOpacity>
+                                    )}
+                                </TouchableOpacity>
+
+                                {/* Android: inline picker shown when state is true */}
+                                {Platform.OS === 'android' && showDatePicker && (
+                                    <DateTimePicker
+                                        value={pickerDate}
+                                        mode="date"
+                                        display="default"
+                                        maximumDate={new Date()}
+                                        onChange={onDateChange}
+                                    />
+                                )}
+
+                                {/* iOS: picker in a modal */}
+                                {Platform.OS === 'ios' && (
+                                    <Modal
+                                        visible={showDatePicker}
+                                        transparent
+                                        animationType="slide"
+                                        onRequestClose={() => setShowDatePicker(false)}
+                                    >
+                                        <View style={styles.dateModalOverlay}>
+                                            <View style={styles.dateModalSheet}>
+                                                <View style={styles.dateModalHeader}>
+                                                    <TouchableOpacity
+                                                        onPress={() => {
+                                                            setShowDatePicker(false);
+                                                            setBirthDate(''); // cancelled
+                                                        }}
+                                                    >
+                                                        <Text style={styles.dateModalCancel}>Cancel</Text>
+                                                    </TouchableOpacity>
+                                                    <Text style={styles.dateModalTitle}>Birth Date</Text>
+                                                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                                        <Text style={styles.dateModalDone}>Done</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <DateTimePicker
+                                                    value={pickerDate}
+                                                    mode="date"
+                                                    display="spinner"
+                                                    maximumDate={new Date()}
+                                                    onChange={onDateChange}
+                                                    style={styles.iosDatePicker}
+                                                    textColor="#fff"
+                                                />
+                                            </View>
+                                        </View>
+                                    </Modal>
+                                )}
+
+                                {ageInfo && (
+                                    <View style={styles.ageBadge}>
+                                        <MaterialIcons name="cake" size={13} color={PRIMARY} />
+                                        <Text style={styles.ageBadgeText}>Age: {ageInfo.label}</Text>
+                                        <Text style={styles.ageBadgeSub}>
+                                            · {autoRecommendable ? 'Breeding age ✓' : 'Below breeding age'}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
 
@@ -323,18 +652,38 @@ export default function RegisterAnimal() {
 
                         <View style={styles.divider} />
 
-                        {/* Recommendable Toggle */}
+                        {/* Recommendable */}
                         <View style={styles.toggleRow}>
-                            <View>
+                            <View style={{ flex: 1, marginRight: 12 }}>
                                 <Text style={styles.toggleTitle}>Recommendable</Text>
-                                <Text style={styles.toggleSub}>Available for breeding programs</Text>
+                                <Text style={styles.toggleSub}>
+                                    {autoRecommendable !== null
+                                        ? 'Auto-set from age — edit birth date to change'
+                                        : 'Available for breeding programs'}
+                                </Text>
                             </View>
-                            <Switch
-                                value={recommendable}
-                                onValueChange={setRecommendable}
-                                trackColor={{ false: '#374151', true: PRIMARY }}
-                                thumbColor="#fff"
-                            />
+                            {autoRecommendable !== null ? (
+                                <View style={[
+                                    styles.autoBadge,
+                                    { backgroundColor: autoRecommendable ? 'rgba(17,212,30,0.1)' : 'rgba(239,68,68,0.1)' },
+                                ]}>
+                                    <MaterialIcons
+                                        name={autoRecommendable ? 'check-circle' : 'cancel'}
+                                        size={13}
+                                        color={autoRecommendable ? PRIMARY : '#ef4444'}
+                                    />
+                                    <Text style={[styles.autoBadgeText, { color: autoRecommendable ? PRIMARY : '#ef4444' }]}>
+                                        {autoRecommendable ? 'Yes' : 'No'}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <Switch
+                                    value={recommendable}
+                                    onValueChange={setRecommendable}
+                                    trackColor={{ false: '#374151', true: PRIMARY }}
+                                    thumbColor="#fff"
+                                />
+                            )}
                         </View>
                     </GlassPanel>
 
@@ -663,5 +1012,142 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
+    },
+    aiResultRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    aiBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+        backgroundColor: 'rgba(17,212,30,0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(17,212,30,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    aiBadgeText: {
+        color: PRIMARY,
+        fontSize: 13,
+        fontWeight: '600',
+        flexShrink: 1,
+    },
+    overrideBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    overrideBtnText: {
+        color: SLATE_400,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    ageBadge: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        gap: 4,
+        marginTop: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: 'rgba(17,212,30,0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(17,212,30,0.15)',
+        alignSelf: 'flex-start' as const,
+    },
+    ageBadgeText: {
+        fontSize: 12,
+        fontWeight: '600' as const,
+        color: PRIMARY,
+    },
+    ageBadgeSub: {
+        fontSize: 12,
+        color: SLATE_400,
+    },
+    autoBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(17,212,30,0.1)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    autoBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: PRIMARY,
+    },
+
+    // Date picker
+    dateBtn: {
+        height: 48,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    dateBtnText: {
+        flex: 1,
+        color: '#fff',
+        fontSize: 14,
+    },
+    dateBtnPlaceholder: {
+        color: SLATE_500,
+    },
+
+    // iOS date modal
+    dateModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.55)',
+    },
+    dateModalSheet: {
+        backgroundColor: '#111a11',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        borderTopWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        paddingBottom: 32,
+    },
+    dateModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.07)',
+    },
+    dateModalTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    dateModalCancel: {
+        fontSize: 15,
+        color: SLATE_400,
+        fontWeight: '500',
+    },
+    dateModalDone: {
+        fontSize: 15,
+        color: PRIMARY,
+        fontWeight: '700',
+    },
+    iosDatePicker: {
+        height: 200,
+        backgroundColor: 'transparent',
     },
 });

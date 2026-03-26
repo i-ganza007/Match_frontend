@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,10 +7,12 @@ import {
     TouchableOpacity,
     Image,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getAnimal, Animal, getSpeciesLabel } from '../../services/animals';
 
 const PRIMARY = '#11d41e';
 const BG_DARK = '#102211';
@@ -25,6 +27,14 @@ const Glass = ({ children, style }: { children: React.ReactNode; style?: any }) 
     <View style={[styles.glass, style]}>{children}</View>
 );
 
+function calcAge(birthDate?: string): string {
+    if (!birthDate) return 'Unknown';
+    const diff = Date.now() - new Date(birthDate).getTime();
+    const years = diff / (1000 * 60 * 60 * 24 * 365.25);
+    if (years < 1) return `${Math.floor(years * 12)} mo`;
+    return `${years.toFixed(1)} yrs`;
+}
+
 // A simple circular progress indicator via a ring overlay
 const BreedConfidenceCircle = ({ percent }: { percent: number }) => (
     <View style={styles.confidenceCircle}>
@@ -36,13 +46,59 @@ const BreedConfidenceCircle = ({ percent }: { percent: number }) => (
 
 export default function AnimalProfile() {
     const router = useRouter();
+    const { animalId } = useLocalSearchParams<{ animalId: string }>();
+
+    const [animal, setAnimal]   = useState<Animal | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError]     = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!animalId) {
+            setError('No animal ID provided');
+            setLoading(false);
+            return;
+        }
+        getAnimal(animalId)
+            .then(setAnimal)
+            .catch(e => setError(e.message ?? 'Failed to load animal'))
+            .finally(() => setLoading(false));
+    }, [animalId]);
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={PRIMARY} />
+            </View>
+        );
+    }
+
+    if (error || !animal) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: 12, padding: 24 }]}>
+                <MaterialIcons name="error-outline" size={48} color="#ef4444" />
+                <Text style={{ color: '#ef4444', fontSize: 15, textAlign: 'center' }}>
+                    {error ?? 'Animal not found'}
+                </Text>
+                <TouchableOpacity onPress={() => router.navigate('/(tabs)/my-herd' as any)}>
+                    <Text style={{ color: PRIMARY, fontSize: 14 }}>Go back</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const displayName   = animal.name ?? `Animal #${animal.animalId.slice(-6)}`;
+    const speciesLabel  = getSpeciesLabel(animal.specie);
+    const confidence    = Math.round((animal.breed_confidence ?? 0) * 100);
+    const age           = calcAge(animal.birthDate);
+    const sexLabel      = animal.sex === 'MALE' ? 'Male' : 'Female';
+    const sexIcon       = animal.sex === 'MALE' ? 'male' : 'female';
 
     return (
         <View style={styles.container}>
             {/* Top Navigation */}
             <View style={styles.nav}>
                 <View style={styles.navLeft}>
-                    <TouchableOpacity style={styles.navIconBtn} onPress={() => router.back()}>
+                    <TouchableOpacity style={styles.navIconBtn} onPress={() => router.navigate('/(tabs)/my-herd' as any)}>
                         <MaterialIcons name="arrow-back" size={22} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.navTitle}>Animal Profile</Text>
@@ -61,33 +117,32 @@ export default function AnimalProfile() {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Hero Section */}
                 <View style={styles.heroSection}>
-                    {/* Animal Avatar with glow */}
                     <View style={styles.avatarWrapper}>
                         <View style={styles.avatarGlow} />
                         <View style={styles.avatarBorder}>
-                            <Image
-                                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDIu33YeTIU8Bj62zO0yLyxJro3svgUOeGyn7H_DSCTFyfmUt8huLDXJYOt_Xo7qmOWs-mJ9K0xV-cb4JnirjFO_OLi8jnXKuJH_hWYeZSWCfh1bEHEkMWYB8_GIEBGzzBzX0iT7Fg3YICdHdyLKZOeq0OuxyxjTTN5zckq-S-AbNuv55VVWWmHyI8BAQjGSrqJoLIkq_2qYr_DzAGPAfUvrb_G7re_269PM5tfSaaM0UzKkK3YAJeYwt2UdOw4Z1qtyvaHHtuYzWA' }}
-                                style={styles.avatarImage}
-                            />
+                            {animal.profilePhoto ? (
+                                <Image source={{ uri: animal.profilePhoto }} style={styles.avatarImage} />
+                            ) : (
+                                <View style={[styles.avatarImage, { backgroundColor: 'rgba(17,212,30,0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                                    <MaterialIcons name="pets" size={56} color={PRIMARY + '88'} />
+                                </View>
+                            )}
                         </View>
-                        {/* Check badge */}
                         <View style={styles.checkBadge}>
                             <MaterialIcons name="check" size={14} color={BG_DARK} />
                         </View>
                     </View>
 
-                    {/* Name & status */}
-                    <Text style={styles.animalName}>Midnight Shadow</Text>
+                    <Text style={styles.animalName}>{displayName}</Text>
                     <View style={styles.statusRow}>
                         <View style={styles.aliveIndicator}>
                             <View style={styles.aliveDot} />
-                            <Text style={styles.aliveText}>ALIVE</Text>
+                            <Text style={styles.aliveText}>{animal.status ?? 'ALIVE'}</Text>
                         </View>
                         <Text style={styles.statusDot}>•</Text>
-                        <Text style={styles.gradeText}>Premium Grade</Text>
+                        <Text style={styles.gradeText}>{speciesLabel}</Text>
                     </View>
 
-                    {/* Action Buttons */}
                     <View style={styles.actionRow}>
                         <TouchableOpacity style={styles.primaryActionBtn} onPress={() => router.push('/(tabs)/animal-performance' as any)}>
                             <MaterialIcons name="bar-chart" size={20} color={BG_DARK} />
@@ -105,29 +160,29 @@ export default function AnimalProfile() {
                     <Glass style={styles.metaCard}>
                         <Text style={styles.metaLabel}>SEX</Text>
                         <View style={styles.metaValue}>
-                            <MaterialIcons name="male" size={20} color={PRIMARY} />
-                            <Text style={styles.metaValueText}>Male</Text>
+                            <MaterialIcons name={sexIcon as any} size={20} color={PRIMARY} />
+                            <Text style={styles.metaValueText}>{sexLabel}</Text>
                         </View>
                     </Glass>
                     <Glass style={styles.metaCard}>
                         <Text style={styles.metaLabel}>AGE</Text>
                         <View style={styles.metaValue}>
                             <MaterialIcons name="event-note" size={20} color={PRIMARY} />
-                            <Text style={styles.metaValueText}>4.2 Years</Text>
+                            <Text style={styles.metaValueText}>{age}</Text>
                         </View>
                     </Glass>
                     <Glass style={styles.metaCard}>
                         <Text style={styles.metaLabel}>SPECIE</Text>
                         <View style={styles.metaValue}>
                             <MaterialIcons name="pets" size={20} color={PRIMARY} />
-                            <Text style={styles.metaValueText}>Bovine</Text>
+                            <Text style={styles.metaValueText} numberOfLines={1}>{speciesLabel}</Text>
                         </View>
                     </Glass>
                     <Glass style={styles.metaCard}>
                         <Text style={styles.metaLabel}>BREED CONFIDENCE</Text>
                         <View style={styles.metaValue}>
-                            <BreedConfidenceCircle percent={92} />
-                            <Text style={styles.metaValueText}>Angus</Text>
+                            <BreedConfidenceCircle percent={confidence} />
+                            <Text style={styles.metaValueText}>{confidence}%</Text>
                         </View>
                     </Glass>
                 </View>
@@ -139,73 +194,73 @@ export default function AnimalProfile() {
                             <MaterialIcons name="account-tree" size={20} color={PRIMARY} />
                             <Text style={styles.sectionTitle}>Lineage</Text>
                         </View>
-                        <TouchableOpacity>
-                            <Text style={styles.sectionAction}>View Family Tree</Text>
-                        </TouchableOpacity>
                     </View>
 
-                    {/* Parents */}
                     <View style={styles.parentsRow}>
                         {/* Mother */}
-                        <TouchableOpacity style={styles.parentCard} activeOpacity={0.8}>
+                        <TouchableOpacity
+                            style={styles.parentCard}
+                            activeOpacity={animal.mother ? 0.8 : 1}
+                            onPress={animal.mother ? () => router.push({
+                                pathname: '/(tabs)/animal-profile' as any,
+                                params: { animalId: animal.mother!.animalId },
+                            }) : undefined}
+                        >
                             <View style={styles.parentAvatarWrapper}>
-                                <Image
-                                    source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA_RNhDuLBd6kwHS80mzP1LHnYRdzYh87U9YlIGVS6OQGTnEk0ONruq2NzMlBSjcE-fhK1p-WmRtHx3Sv4CMrmgF9IEfZgAucbmxxC-CQsRL1cpsSWRV_9CwYA6Nj0f3GSX2xJATMDB_mRa3TZ1pq5jixryVYXuV0q-4x6Jhgas9SIT0PQLGB-8BG5gS1PfLRUmVeOR4ca_AqfiGJYpqp7_znOdNGBBXSc99xYaHTdPKlyH64z7NKnFtUAtMIvH5pnvhIOEgyo6Drw' }}
-                                    style={styles.parentAvatar}
-                                />
+                                {animal.mother?.profilePhoto ? (
+                                    <Image source={{ uri: animal.mother.profilePhoto }} style={styles.parentAvatar} />
+                                ) : (
+                                    <View style={[styles.parentAvatar, { backgroundColor: 'rgba(17,212,30,0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                                        <MaterialIcons name="female" size={20} color={PRIMARY + '88'} />
+                                    </View>
+                                )}
                             </View>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.parentLabel}>MOTHER</Text>
-                                <Text style={styles.parentName}>Bella Vista</Text>
+                                <Text style={styles.parentName} numberOfLines={1}>
+                                    {animal.mother?.name ?? (animal.motherId ? `#${animal.motherId.slice(-6)}` : 'Unknown')}
+                                </Text>
                             </View>
                         </TouchableOpacity>
 
                         {/* Father */}
-                        <TouchableOpacity style={styles.parentCard} activeOpacity={0.8}>
+                        <TouchableOpacity
+                            style={styles.parentCard}
+                            activeOpacity={animal.father ? 0.8 : 1}
+                            onPress={animal.father ? () => router.push({
+                                pathname: '/(tabs)/animal-profile' as any,
+                                params: { animalId: animal.father!.animalId },
+                            }) : undefined}
+                        >
                             <View style={styles.parentAvatarWrapper}>
-                                <Image
-                                    source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCy-LLs1yoQixclRbTAheYX5F2ldor-PZaMoaS8zHqpoQgDAcJFXUabrv3jDGXLmGx5D5jBux7Ksa7JwEqronmZpMbvP5W65G_J-ERRCmtdfUHxt9BZYxVUErHx1L8G_dt6ELIRak49WgdvhAOWQcjyDVJFJIZFZGx0NAMpBusTjG8yE2ixLGU8BxYq7bbNRAuoIV5h_Xko5T8pkG3OvjHcS-6qJgMRBCxlCEu9xx5RIH4Hnry32ju3SNxJodlieuI0rAqRJtuJ4Lo' }}
-                                    style={styles.parentAvatar}
-                                />
+                                {animal.father?.profilePhoto ? (
+                                    <Image source={{ uri: animal.father.profilePhoto }} style={styles.parentAvatar} />
+                                ) : (
+                                    <View style={[styles.parentAvatar, { backgroundColor: 'rgba(17,212,30,0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                                        <MaterialIcons name="male" size={20} color={PRIMARY + '88'} />
+                                    </View>
+                                )}
                             </View>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.parentLabel}>FATHER</Text>
-                                <Text style={styles.parentName}>King Magnus</Text>
+                                <Text style={styles.parentName} numberOfLines={1}>
+                                    {animal.father?.name ?? (animal.fatherId ? `#${animal.fatherId.slice(-6)}` : 'Unknown')}
+                                </Text>
                             </View>
                         </TouchableOpacity>
-                    </View>
-
-                    {/* Recent Offspring */}
-                    <Text style={styles.offspringTitle}>RECENT OFFSPRING</Text>
-                    <View style={styles.offspringList}>
-                        {[
-                            { name: 'Shadow Junior', born: 'Born Mar 12, 2023' },
-                            { name: 'Midnight Rose', born: 'Born Nov 05, 2022' },
-                        ].map((calf, idx) => (
-                            <TouchableOpacity key={idx} style={styles.calfRow} activeOpacity={0.8}>
-                                <View style={styles.calfIconBox}>
-                                    <MaterialIcons name="child-care" size={20} color={PRIMARY} />
-                                </View>
-                                <View style={styles.calfInfo}>
-                                    <Text style={styles.calfName}>{calf.name}</Text>
-                                    <Text style={styles.calfBorn}>{calf.born}</Text>
-                                </View>
-                                <MaterialIcons name="chevron-right" size={22} color={SLATE_500} />
-                            </TouchableOpacity>
-                        ))}
                     </View>
                 </View>
             </ScrollView>
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem}>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.navigate('/(tabs)/home' as any)}>
                     <MaterialIcons name="home" size={24} color={SLATE_400} />
                     <Text style={styles.navItemText}>Home</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <MaterialIcons name="search" size={24} color={SLATE_400} />
-                    <Text style={styles.navItemText}>Search</Text>
+                <TouchableOpacity style={styles.navItem} onPress={() => router.navigate('/(tabs)/my-herd' as any)}>
+                    <MaterialIcons name="groups" size={24} color={SLATE_400} />
+                    <Text style={styles.navItemText}>Herd</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem}>
                     <MaterialIcons name="account-tree" size={24} color={PRIMARY} />

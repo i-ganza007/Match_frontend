@@ -1,536 +1,537 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+    View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../context/ThemeContext';
+import { getAllAnimals, getSpeciesLabel, Animal } from '../../../services/animals';
+import { getUserData } from '../../../services/secureStorage';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
+const PLACEHOLDER = 'https://hzihqpbtzfseejihukvk.supabase.co/storage/v1/object/public/Animal_Images/avatar.jpg';
+const { width: SW, height: SH } = Dimensions.get('window');
 
-const GlassView = ({ children, style, bright = false }: { children: React.ReactNode, style?: any, bright?: boolean }) => {
-    const { colors, isDark } = useTheme();
+// ─── Canvas layout constants ──────────────────────────────────────────────────
+const CW = 2800, CH = 2400;   // canvas dimensions
+const CX = CW / 2;             // horizontal center
+const YGP  = 300;              // grandparent row y
+const YP   = 600;              // parent row y
+const YS   = 920;              // subject y
+const YSIB = 1180;             // sibling row y
+const YOTH = 1480;             // unrelated animals row y
+
+// Horizontal positions for tree nodes
+const FX   = CX - 280;        // father
+const MX   = CX + 280;        // mother
+const PGFX = CX - 500;        // paternal grandfather
+const PGMX = CX - 100;        // paternal grandmother
+const MGFX = CX + 100;        // maternal grandfather
+const MGMX = CX + 500;        // maternal grandmother
+
+const INIT_SCALE   = 0.82;
+
+// Node sizes per generation
+const SZ_SUBJECT = 78;
+const SZ_PARENT  = 62;
+const SZ_GRAND   = 50;
+const SZ_SIBLING = 50;
+const SZ_OTHER   = 42;    // standalone — no spike
+
+// ─── Edge: line connecting two canvas points ──────────────────────────────────
+const Edge = ({
+    x1, y1, x2, y2, dim = false,
+}: {
+    x1: number; y1: number; x2: number; y2: number; dim?: boolean;
+}) => {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return null;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
     return (
-        <View style={[
-            styles.glass,
-            {
-                backgroundColor: bright
-                    ? (isDark ? 'rgba(17, 212, 30, 0.15)' : 'rgba(17, 212, 30, 0.2)')
-                    : colors.glassBackground,
-                borderColor: bright
-                    ? (isDark ? 'rgba(17, 212, 30, 0.3)' : 'rgba(17, 212, 30, 0.4)')
-                    : colors.glassBorder,
-                borderWidth: 1,
-            },
-            style
-        ]}>
-            {children}
-        </View>
+        <View style={{
+            position: 'absolute',
+            left: (x1 + x2) / 2 - len / 2,
+            top:  (y1 + y2) / 2 - 1,
+            width: len, height: 2, borderRadius: 1,
+            backgroundColor: dim ? 'rgba(17,212,30,0.1)' : 'rgba(17,212,30,0.35)',
+            transform: [{ rotate: `${angle}deg` }],
+        }} />
     );
 };
 
-export default function PedigreeScreen() {
-    const router = useRouter();
-    const { colors, isDark } = useTheme();
-
-    const placeholderImg = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDspxML4A6SYRldREK3Cc4esLzSzwZLPLw1cc7Lb5EsGcqHWLflsQ-G6fH_qCLCvIq-5f_ibGOm9fROQ0jDdp145XhKMkrblOMPziKdK9erPESIfwUT8RhbbLDcTZWULYGkxbzhnjjOpVYfrHD8GNYuqFIoOI3yfC9Lm4ao44L2R7lYro1dPqPsGXra21gepLknV2fO_6l80_eb81lx1ElO_gmKbz4Tio3mTtKHMdM4FpK7IZS_B8Z-WoXNudy-C02qXJYsyvtpld0';
+// ─── Canvas node (map-pin style) ─────────────────────────────────────────────
+const CanvasNode = ({
+    animal, label, x, y,
+    isSubject  = false,
+    isStandalone = false,
+    size = SZ_PARENT,
+    onPress,
+}: {
+    animal: Animal | null;
+    label: string;
+    x: number; y: number;
+    isSubject?: boolean;
+    isStandalone?: boolean;
+    size?: number;
+    onPress: (id?: string) => void;
+}) => {
+    const ringColor   = isSubject ? '#11d41e' : 'rgba(255,255,255,0.22)';
+    const spikeColor  = isSubject ? '#11d41e' : 'rgba(255,255,255,0.28)';
+    const spikeW      = isSubject ? 8 : 5;
+    const spikeH      = isSubject ? 12 : 8;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => onPress(animal?.animalId)}
+            // Centre the pin-head circle on (x, y); spike hangs below
+            style={[styles.node, { left: x - size / 2, top: y - size / 2 }]}
+        >
+            {/* Subject glow ring */}
+            {isSubject && (
+                <View style={{
+                    position: 'absolute',
+                    top: -6, left: -6,
+                    width: size + 12, height: size + 12,
+                    borderRadius: (size + 12) / 2,
+                    borderWidth: 2.5, borderColor: '#11d41e',
+                }} />
+            )}
 
-                {/* 1. Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <MaterialIcons name="arrow-back" size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Genetic Lineage</Text>
-                    <GlassView style={styles.langToggle}>
-                        <View style={styles.langBtnActive}>
-                            <Text style={styles.langTextActive}>EN</Text>
-                        </View>
-                        <View style={styles.langBtn}>
-                            <Text style={styles.langText}>RW</Text>
-                        </View>
-                    </GlassView>
-                </View>
+            {/* Pin head — avatar circle */}
+            <View style={{
+                width: size, height: size, borderRadius: size / 2,
+                borderWidth: isStandalone ? 1.5 : 2,
+                borderColor: isStandalone ? 'rgba(255,255,255,0.15)' : ringColor,
+                overflow: 'hidden',
+                opacity: !animal ? 0.28 : 1,
+            }}>
+                <Image
+                    source={{ uri: animal?.profilePhoto ?? PLACEHOLDER }}
+                    style={{ width: size, height: size }}
+                />
+            </View>
 
-                {/* 2. Stats */}
-                <View style={styles.statsRow}>
-                    <GlassView style={styles.statCard} bright>
-                        <Text style={styles.statLabelGreen}>INBREEDING COEFF.</Text>
-                        <View style={styles.statRowValue}>
-                            <Text style={styles.statValue}>1.2%</Text>
-                            <Text style={styles.statTrendGreen}> Stable</Text>
-                        </View>
-                    </GlassView>
-                    <GlassView style={styles.statCard}>
-                        <Text style={styles.statLabel}>GENETIC PURITY</Text>
-                        <View style={styles.statRowValue}>
-                            <Text style={styles.statValue}>98.5%</Text>
-                            <Text style={styles.statTrendGreen}> +0.5%</Text>
-                        </View>
-                    </GlassView>
-                </View>
+            {/* Pin spike — only for tree nodes */}
+            {!isStandalone && (
+                <View style={{
+                    width: 0, height: 0,
+                    borderLeftWidth: spikeW,
+                    borderRightWidth: spikeW,
+                    borderTopWidth: spikeH,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderTopColor: spikeColor,
+                    marginTop: 1,
+                }} />
+            )}
 
-                {/* 3. Pedigree Tree */}
-                <View style={styles.treeContainer}>
-                    {/* Grandparents */}
-                    <View style={styles.generationRow}>
-                        <View style={styles.avatarNode}>
-                            <Image source={{ uri: placeholderImg }} style={styles.gAvatar} />
-                            <Text style={styles.nodeText}>G.Sire 1</Text>
-                        </View>
-                        <View style={styles.avatarNode}>
-                            <Image source={{ uri: placeholderImg }} style={styles.gAvatar} />
-                            <Text style={styles.nodeText}>G.Dam 1</Text>
-                        </View>
-                        <View style={{ width: 40 }} />
-                        <View style={styles.avatarNode}>
-                            <Image source={{ uri: placeholderImg }} style={styles.gAvatar} />
-                            <Text style={styles.nodeText}>G.Sire 2</Text>
-                        </View>
-                        <View style={styles.avatarNode}>
-                            <Image source={{ uri: placeholderImg }} style={styles.gAvatar} />
-                            <Text style={styles.nodeText}>G.Dam 2</Text>
-                        </View>
-                    </View>
+            {/* Label */}
+            <Text
+                style={[
+                    styles.nodeLabel,
+                    isSubject     && styles.nodeLabelGreen,
+                    isStandalone  && { color: 'rgba(255,255,255,0.35)', fontSize: 9 },
+                    { maxWidth: size + 28 },
+                ]}
+                numberOfLines={1}
+            >
+                {animal
+                    ? (animal.name ?? getSpeciesLabel(animal.specie)).slice(0, 9)
+                    : label}
+            </Text>
+        </TouchableOpacity>
+    );
+};
 
-                    {/* Hierarchy Lines */}
-                    <View style={styles.linesRow}>
-                        <View style={[styles.treeLineHorizontal, { width: 60, left: '20%' }]} />
-                        <View style={[styles.treeLineHorizontal, { width: 60, right: '20%' }]} />
-                        <View style={[styles.treeLineVertical, { left: '30%' }]} />
-                        <View style={[styles.treeLineVertical, { right: '30%' }]} />
-                    </View>
+// ─── Generation label ─────────────────────────────────────────────────────────
+const GenLabel = ({ text, y }: { text: string; y: number }) => (
+    <Text style={[styles.genLabel, { top: y - 32 }]}>{text}</Text>
+);
 
-                    {/* Parents */}
-                    <View style={styles.generationRowParents}>
-                        <GlassView style={styles.parentPill} bright>
-                            <Image source={{ uri: placeholderImg }} style={styles.pAvatar} />
-                            <View>
-                                <Text style={styles.pLabel}>SIRE</Text>
-                                <Text style={styles.pName}>Gihamya</Text>
-                            </View>
-                        </GlassView>
-                        <GlassView style={styles.parentPill}>
-                            <Image source={{ uri: placeholderImg }} style={styles.pAvatar} />
-                            <View>
-                                <Text style={styles.pLabelGreen}>DAM</Text>
-                                <Text style={styles.pName}>Inyambo</Text>
-                            </View>
-                        </GlassView>
-                    </View>
+const getAge = (birthDate?: string | null) => {
+    if (!birthDate) return null;
+    const m = (Date.now() - new Date(birthDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+    return m < 12 ? `${Math.round(m)}m` : `${(m / 12).toFixed(1)}y`;
+};
 
-                    {/* Main Subject */}
-                    <View style={styles.linesRowSubject}>
-                        <View style={[styles.treeLineHorizontal, { width: 140, left: '32%' }]} />
-                        <View style={[styles.treeLineVertical, { left: '50%', height: 30 }]} />
-                    </View>
+// ─── Screen ───────────────────────────────────────────────────────────────────
+export default function PedigreeScreen() {
+    const router = useRouter();
+    const { isDark } = useTheme();
+    const { animalId: paramId } = useLocalSearchParams<{ animalId?: string }>();
 
-                    <View style={styles.subjectContainer}>
-                        <View style={styles.subjectImageBorder}>
-                            <Image source={{ uri: placeholderImg }} style={styles.subjectImage} />
-                        </View>
-                    </View>
+    const [animals, setAnimals]       = useState<Animal[]>([]);
+    const [loading, setLoading]       = useState(true);
+    const [error, setError]           = useState<string | null>(null);
+    const [userId, setUserId]         = useState<string | null>(null);
+    const [selectedId, setSelectedId] = useState<string | null>(paramId ?? null);
 
-                    {/* Subject Details */}
-                    <View style={styles.subjectDetailsCardContainer}>
-                        <GlassView style={styles.subjectDetailsCard} bright>
-                            <Text style={styles.subjectName}>Ingabo</Text>
-                            <Text style={styles.subjectBreed}>ANKOLE PUREBRED</Text>
-                            <View style={styles.subjectDetailsRow}>
-                                <View style={styles.subjectDetailItem}>
-                                    <Text style={styles.detailLabel}>AGE</Text>
-                                    <Text style={styles.detailValue}>2.4y</Text>
-                                </View>
-                                <View style={styles.subjectDetailItem}>
-                                    <Text style={styles.detailLabel}>HEALTH</Text>
-                                    <Text style={styles.detailValueGreen}>94%</Text>
-                                </View>
-                            </View>
-                        </GlassView>
-                    </View>
-                </View>
+    // ── Gesture shared values ────────────────────────────────────────────────
+    const iTX = SW / 2 - CX * INIT_SCALE;
+    const iTY = SH * 0.38 - YS * INIT_SCALE;
+    const tX  = useSharedValue(iTX);
+    const tY  = useSharedValue(iTY);
+    const sTX = useSharedValue(iTX);
+    const sTY = useSharedValue(iTY);
+    const sc  = useSharedValue(INIT_SCALE);
+    const sSc = useSharedValue(INIT_SCALE);
 
-                {/* Chips at the bottom */}
-                <View style={styles.bottomChips}>
-                    <GlassView style={styles.chip}>
-                        <MaterialCommunityIcons name="face-recognition" size={14} color="#fff" />
-                        <Text style={styles.chipText}>Imbabazi (F)</Text>
-                    </GlassView>
-                    <GlassView style={styles.chip}>
-                        <MaterialCommunityIcons name="face-recognition" size={14} color="#fff" />
-                        <Text style={styles.chipText}>Rugari (M)</Text>
-                    </GlassView>
-                </View>
+    useEffect(() => {
+        (async () => {
+            try {
+                const [data, user] = await Promise.all([getAllAnimals(), getUserData()]);
+                setAnimals(data);
+                const uid = user?.userId ?? null;
+                setUserId(uid);
+                if (!selectedId) {
+                    const first = (uid ? data.filter(a => a.ownerId === uid) : data)[0];
+                    if (first) setSelectedId(first.animalId);
+                }
+            } catch (e: any) {
+                setError(e.message ?? 'Failed to load animals');
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
 
-                <View style={{ height: 100 }} />
+    // ── Tree derivation (null-safe at every level) ───────────────────────────
+    const subject = selectedId ? (animals.find(a => a.animalId === selectedId) ?? null) : null;
+    const father  = subject?.father ?? null;
+    const mother  = subject?.mother ?? null;
+    const pgf     = father?.father  ?? null;   // paternal grandfather
+    const pgm     = father?.mother  ?? null;   // paternal grandmother
+    const mgf     = mother?.father  ?? null;   // maternal grandfather
+    const mgm     = mother?.mother  ?? null;   // maternal grandmother
 
-            </ScrollView>
+    const knownAncestors = [father, mother, pgf, pgm, mgf, mgm].filter(Boolean).length;
+    const myAnimals = userId ? animals.filter(a => a.ownerId === userId) : animals;
 
-            {/* Right floating tools */}
-            <View style={styles.rightFloatTools}>
-                <TouchableOpacity style={styles.toolBtn}>
-                    <MaterialIcons name="add" size={24} color="#fff" />
+    const siblings = subject
+        ? myAnimals.filter(a =>
+            a.animalId !== subject.animalId &&
+            ((subject.motherId && a.motherId === subject.motherId) ||
+             (subject.fatherId && a.fatherId === subject.fatherId)))
+        : [];
+
+    const treeIds = new Set([
+        subject?.animalId, father?.animalId, mother?.animalId,
+        pgf?.animalId, pgm?.animalId, mgf?.animalId, mgm?.animalId,
+        ...siblings.map(s => s.animalId),
+    ].filter(Boolean) as string[]);
+    const others = myAnimals.filter(a => !treeIds.has(a.animalId));
+
+    // ── Position helpers ─────────────────────────────────────────────────────
+    const sibX = (i: number) => CX + (i - (siblings.length - 1) / 2) * 160;
+    const othX = (i: number) => CX + (i - (others.length - 1) / 2) * 160;
+
+    // ── Gestures ─────────────────────────────────────────────────────────────
+    const panG = Gesture.Pan()
+        .activeOffsetX([-8, 8])
+        .activeOffsetY([-8, 8])
+        .onUpdate(e => {
+            tX.value = sTX.value + e.translationX;
+            tY.value = sTY.value + e.translationY;
+        })
+        .onEnd(() => {
+            sTX.value = tX.value;
+            sTY.value = tY.value;
+        });
+
+    const pinchG = Gesture.Pinch()
+        .onUpdate(e => {
+            sc.value = Math.max(0.3, Math.min(2.5, sSc.value * e.scale));
+        })
+        .onEnd(() => {
+            sSc.value = sc.value;
+        });
+
+    const composed = Gesture.Simultaneous(panG, pinchG);
+
+    const canvasStyle = useAnimatedStyle(() => ({
+        transform: [
+            { translateX: tX.value },
+            { translateY: tY.value },
+            { scale: sc.value },
+        ],
+    }));
+
+    // Re-centre the view so the subject sits at 38% down the screen
+    const snapToSubject = () => {
+        const s = sSc.value;
+        const tx = SW / 2 - CX * s;
+        const ty = SH * 0.38 - YS * s;
+        tX.value = withSpring(tx, { damping: 18 });
+        tY.value = withSpring(ty, { damping: 18 });
+        sTX.value = tx;
+        sTY.value = ty;
+    };
+
+    const handleNodePress = (id?: string) => {
+        if (!id) return;
+        setSelectedId(id);
+        snapToSubject();
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    return (
+        <SafeAreaView style={styles.container} edges={['top']}>
+
+            {/* ── Header ── */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+                    <MaterialIcons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.toolBtn}>
-                    <MaterialIcons name="remove" size={24} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.toolBtn, { marginTop: 12 }]}>
-                    <MaterialCommunityIcons name="crop-free" size={20} color="#fff" />
+                <Text style={styles.headerTitle}>Genetic Lineage</Text>
+                <TouchableOpacity onPress={snapToSubject} style={[styles.iconBtn, styles.iconBtnGreen]}>
+                    <MaterialCommunityIcons name="image-filter-center-focus" size={20} color="#11d41e" />
                 </TouchableOpacity>
             </View>
 
-            {/* Bottom Navigation */}
+            {/* ── States ── */}
+            {loading && (
+                <View style={styles.centerBox}>
+                    <ActivityIndicator size="large" color="#11d41e" />
+                    <Text style={styles.centerText}>Loading animals...</Text>
+                </View>
+            )}
+            {!loading && error && (
+                <View style={styles.centerBox}>
+                    <MaterialIcons name="error-outline" size={40} color="rgba(255,80,80,0.8)" />
+                    <Text style={[styles.centerText, { color: 'rgba(255,80,80,0.8)' }]}>{error}</Text>
+                </View>
+            )}
+            {!loading && !error && myAnimals.length === 0 && (
+                <View style={styles.centerBox}>
+                    <MaterialCommunityIcons name="paw" size={48} color="rgba(255,255,255,0.2)" />
+                    <Text style={styles.centerText}>No animals registered yet.</Text>
+                </View>
+            )}
+
+            {/* ── Canvas ── */}
+            {!loading && !error && myAnimals.length > 0 && (
+                <GestureDetector gesture={composed}>
+                    <View style={styles.viewport}>
+                        <Animated.View style={[styles.canvas, canvasStyle]}>
+
+                            {/* Faint horizontal generation bands */}
+                            <View style={[styles.genBand, { top: YGP - 52 }]} />
+                            <View style={[styles.genBand, { top: YP   - 52 }]} />
+                            <View style={[styles.genBand, { top: YS   - 52 }]} />
+
+                            {/* Generation labels */}
+                            <GenLabel text="GRANDPARENTS" y={YGP} />
+                            <GenLabel text="PARENTS"      y={YP}  />
+                            <GenLabel text="SUBJECT"      y={YS}  />
+                            {siblings.length > 0 && <GenLabel text="SIBLINGS"      y={YSIB} />}
+                            {others.length   > 0 && <GenLabel text="OTHER ANIMALS" y={YOTH} />}
+
+                            {/* ── Edges ── */}
+                            {pgf && father && <Edge x1={PGFX} y1={YGP} x2={FX} y2={YP} />}
+                            {pgm && father && <Edge x1={PGMX} y1={YGP} x2={FX} y2={YP} />}
+                            {mgf && mother && <Edge x1={MGFX} y1={YGP} x2={MX} y2={YP} />}
+                            {mgm && mother && <Edge x1={MGMX} y1={YGP} x2={MX} y2={YP} />}
+                            {father && subject && <Edge x1={FX} y1={YP} x2={CX} y2={YS} />}
+                            {mother && subject && <Edge x1={MX} y1={YP} x2={CX} y2={YS} />}
+                            {/* Sibling edges — connect from shared parents */}
+                            {siblings.map((sib, i) => (
+                                <React.Fragment key={sib.animalId}>
+                                    {father && sib.fatherId === subject?.fatherId && (
+                                        <Edge x1={FX} y1={YP} x2={sibX(i)} y2={YSIB} dim />
+                                    )}
+                                    {mother && sib.motherId === subject?.motherId && (
+                                        <Edge x1={MX} y1={YP} x2={sibX(i)} y2={YSIB} dim />
+                                    )}
+                                </React.Fragment>
+                            ))}
+
+                            {/* ── Grandparent nodes ── */}
+                            <CanvasNode animal={pgf} label="G.Sire" x={PGFX} y={YGP} size={SZ_GRAND}   onPress={handleNodePress} />
+                            <CanvasNode animal={pgm} label="G.Dam"  x={PGMX} y={YGP} size={SZ_GRAND}   onPress={handleNodePress} />
+                            <CanvasNode animal={mgf} label="G.Sire" x={MGFX} y={YGP} size={SZ_GRAND}   onPress={handleNodePress} />
+                            <CanvasNode animal={mgm} label="G.Dam"  x={MGMX} y={YGP} size={SZ_GRAND}   onPress={handleNodePress} />
+
+                            {/* ── Parent nodes ── */}
+                            <CanvasNode animal={father} label="Sire" x={FX} y={YP} size={SZ_PARENT} onPress={handleNodePress} />
+                            <CanvasNode animal={mother} label="Dam"  x={MX} y={YP} size={SZ_PARENT} onPress={handleNodePress} />
+
+                            {/* ── Subject node ── */}
+                            {subject && (
+                                <CanvasNode
+                                    animal={subject} label=""
+                                    x={CX} y={YS}
+                                    size={SZ_SUBJECT}
+                                    isSubject
+                                    onPress={handleNodePress}
+                                />
+                            )}
+
+                            {/* ── Sibling nodes ── */}
+                            {siblings.map((sib, i) => (
+                                <CanvasNode
+                                    key={sib.animalId}
+                                    animal={sib} label=""
+                                    x={sibX(i)} y={YSIB}
+                                    size={SZ_SIBLING}
+                                    onPress={handleNodePress}
+                                />
+                            ))}
+
+                            {/* ── Other animals — standalone circles, no spike ── */}
+                            {others.map((o, i) => (
+                                <CanvasNode
+                                    key={o.animalId}
+                                    animal={o} label=""
+                                    x={othX(i)} y={YOTH}
+                                    size={SZ_OTHER}
+                                    isStandalone
+                                    onPress={handleNodePress}
+                                />
+                            ))}
+
+                        </Animated.View>
+                    </View>
+                </GestureDetector>
+            )}
+
+            {/* ── Subject info card ── */}
+            {!loading && subject && (
+                <View style={styles.infoCard}>
+                    <Image
+                        source={{ uri: subject.profilePhoto ?? PLACEHOLDER }}
+                        style={styles.infoAvatar}
+                    />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.infoName} numberOfLines={1}>
+                            {subject.name ?? getSpeciesLabel(subject.specie)}
+                        </Text>
+                        <Text style={styles.infoSub} numberOfLines={1}>
+                            {getSpeciesLabel(subject.specie)} · {subject.sex}
+                            {getAge(subject.birthDate) ? ` · ${getAge(subject.birthDate)}` : ''}
+                        </Text>
+                    </View>
+                    <View style={styles.stat}>
+                        <Text style={styles.statLbl}>PURITY</Text>
+                        <Text style={styles.statVal}>
+                            {subject.breed_confidence != null
+                                ? `${(subject.breed_confidence * 100).toFixed(0)}%`
+                                : '—'}
+                        </Text>
+                    </View>
+                    <View style={styles.stat}>
+                        <Text style={styles.statLbl}>LINEAGE</Text>
+                        <Text style={styles.statVal}>{knownAncestors}/6</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* ── Bottom nav ── */}
             <View style={styles.navContainer}>
-                <View style={[styles.navBar, { backgroundColor: '#081209', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}>
-                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/home')}>
-                        <MaterialCommunityIcons name="paw" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>Flock</Text>
+                <View style={styles.navBar}>
+                    <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/home' as any)}>
+                        <MaterialCommunityIcons name="paw" size={24} color="rgba(255,255,255,0.4)" />
+                        <Text style={[styles.navText, { color: 'rgba(255,255,255,0.4)' }]}>Flock</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialCommunityIcons name="graph-outline" size={24} color={colors.primaryGreen} />
-                        <Text style={[styles.navTextActive, { color: colors.primaryGreen }]}>Pedigree</Text>
+                        <MaterialCommunityIcons name="graph-outline" size={24} color="#11d41e" />
+                        <Text style={styles.navTextActive}>Pedigree</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialCommunityIcons name="heart-pulse" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>Health</Text>
+                        <MaterialCommunityIcons name="heart-pulse" size={24} color="rgba(255,255,255,0.4)" />
+                        <Text style={[styles.navText, { color: 'rgba(255,255,255,0.4)' }]}>Health</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <MaterialCommunityIcons name="store" size={24} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)"} />
-                        <Text style={[styles.navText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>Market</Text>
+                        <MaterialCommunityIcons name="store" size={24} color="rgba(255,255,255,0.4)" />
+                        <Text style={[styles.navText, { color: 'rgba(255,255,255,0.4)' }]}>Market</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.navItem}>
-                        <Image source={{ uri: placeholderImg }} style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#FFD700' }} />
+                        <Image
+                            source={{ uri: PLACEHOLDER }}
+                            style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#FFD700' }}
+                        />
                     </TouchableOpacity>
                 </View>
             </View>
+
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#081209',
-    },
-    scrollContent: {
-        paddingBottom: 20,
-    },
-    glass: {
-        borderRadius: 16,
-    },
+    container: { flex: 1, backgroundColor: '#081209' },
+
+    // Header
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 24,
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 20, paddingTop: 10, paddingBottom: 14,
         justifyContent: 'space-between',
     },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+    iconBtn: {
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
     },
-    headerTitle: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-        flex: 1,
-        marginLeft: 16,
+    iconBtnGreen: {
+        backgroundColor: 'rgba(17,212,30,0.07)',
+        borderColor: 'rgba(17,212,30,0.25)',
     },
-    langToggle: {
-        flexDirection: 'row',
-        padding: 4,
-        borderRadius: 999,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        borderWidth: 1,
+    headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', flex: 1, marginLeft: 16 },
+
+    // Loading / error
+    centerBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    centerText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', paddingHorizontal: 40 },
+
+    // Canvas
+    viewport: { flex: 1, overflow: 'hidden' },
+    canvas:   { width: CW, height: CH, backgroundColor: '#081209' },
+        genBand: {
+            position: 'absolute', left: 0, right: 0, height: SZ_GRAND + 60,
+            backgroundColor: 'rgba(255,255,255,0.018)',
+        },
+    genLabel: {
+        position: 'absolute', left: 48,
+        color: 'rgba(255,255,255,0.18)',
+        fontSize: 10, fontWeight: '700', letterSpacing: 2,
     },
-    langBtnActive: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        backgroundColor: '#11d41e',
-        borderRadius: 999,
+
+    // Node
+    node: { position: 'absolute', alignItems: 'center' },
+    nodeLabel: {
+        color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '600',
+        marginTop: 5, textAlign: 'center',
     },
-    langBtn: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
+    nodeLabelGreen: { color: '#11d41e', fontWeight: 'bold', fontSize: 11 },
+
+    // Info card
+    infoCard: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        marginHorizontal: 16, marginBottom: 10,
+        paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
     },
-    langTextActive: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#081209',
-    },
-    langText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: 'rgba(255, 255, 255, 0.4)',
-    },
-    statsRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 20,
-        gap: 12,
-        marginBottom: 40,
-    },
-    statCard: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 20,
-    },
-    statLabel: {
-        fontSize: 10,
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontWeight: 'bold',
-        letterSpacing: 1,
-        marginBottom: 8,
-    },
-    statLabelGreen: {
-        fontSize: 10,
-        color: '#11d41e',
-        fontWeight: 'bold',
-        letterSpacing: 1,
-        opacity: 0.8,
-        marginBottom: 8,
-    },
-    statRowValue: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
-    statTrendGreen: {
-        fontSize: 12,
-        color: '#11d41e',
-        fontWeight: '600',
-        marginLeft: 4,
-    },
-    treeContainer: {
-        paddingHorizontal: 10,
-        position: 'relative',
-    },
-    generationRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 16,
-        marginBottom: 10,
-    },
-    avatarNode: {
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    gAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        marginBottom: 4,
-    },
-    nodeText: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    linesRow: {
-        height: 30,
-        position: 'relative',
-    },
-    treeLineHorizontal: {
-        position: 'absolute',
-        top: 0,
-        height: 1,
-        backgroundColor: 'rgba(17, 212, 30, 0.2)',
-    },
-    treeLineVertical: {
-        position: 'absolute',
-        top: 0,
-        width: 1,
-        height: 20,
-        backgroundColor: 'rgba(17, 212, 30, 0.2)',
-    },
-    generationRowParents: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 32,
-        marginBottom: 20,
-    },
-    parentPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 8,
-        paddingRight: 16,
-        borderRadius: 999,
-        gap: 12,
-    },
-    pAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-    },
-    pLabel: {
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: 10,
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
-    pLabelGreen: {
-        color: '#11d41e',
-        fontSize: 10,
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
-    pName: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    linesRowSubject: {
-        height: 30,
-        position: 'relative',
-    },
-    subjectContainer: {
-        alignItems: 'center',
-        marginBottom: -30, // overlap with card
-        zIndex: 10,
-    },
-    subjectImageBorder: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        padding: 4,
-        borderWidth: 2,
-        borderColor: '#11d41e',
-        backgroundColor: '#081209',
-        overflow: 'hidden',
-    },
-    subjectImage: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 999,
-    },
-    subjectDetailsCardContainer: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    subjectDetailsCard: {
-        width: '60%',
-        alignItems: 'center',
-        paddingTop: 40,
-        paddingBottom: 16,
-        paddingHorizontal: 20,
-        borderRadius: 24,
-    },
-    subjectName: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    subjectBreed: {
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: 10,
-        fontWeight: 'bold',
-        letterSpacing: 2,
-        marginBottom: 16,
-    },
-    subjectDetailsRow: {
-        flexDirection: 'row',
-        gap: 24,
-    },
-    subjectDetailItem: {
-        alignItems: 'center',
-    },
-    detailLabel: {
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: 10,
-        fontWeight: 'bold',
-        marginBottom: 2,
-    },
-    detailValue: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    detailValueGreen: {
-        color: '#11d41e',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    rightFloatTools: {
-        position: 'absolute',
-        right: 20,
-        top: '55%',
-        alignItems: 'center',
-        gap: 12,
-    },
-    toolBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    bottomChips: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 16,
-        marginTop: 20,
-    },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 999,
-        gap: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    chipText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    navContainer: {
-        position: 'absolute',
-        bottom: 24,
-        left: 20,
-        right: 20,
-    },
+    infoAvatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#11d41e' },
+    infoName:   { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+    infoSub:    { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 },
+    stat:       { alignItems: 'center', minWidth: 52 },
+    statLbl:    { color: 'rgba(255,255,255,0.35)', fontSize: 8, fontWeight: 'bold', letterSpacing: 1 },
+    statVal:    { color: '#11d41e', fontSize: 17, fontWeight: 'bold' },
+
+    // Nav
+    navContainer: { paddingHorizontal: 16, paddingBottom: 20 },
     navBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingVertical: 16,
-        borderRadius: 999,
+        flexDirection: 'row', justifyContent: 'space-between',
+        paddingHorizontal: 24, paddingVertical: 16, borderRadius: 999,
+        backgroundColor: '#081209',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
     },
-    navItem: {
-        alignItems: 'center',
-        gap: 4,
-    },
-    navTextActive: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
-    },
-    navText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
-    },
+    navItem:      { alignItems: 'center', gap: 4 },
+    navTextActive:{ fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, color: '#11d41e' },
+    navText:      { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
 });

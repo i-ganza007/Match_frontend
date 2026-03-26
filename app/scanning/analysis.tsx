@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, StatusBar, TouchableOpacity, Platform } from 'react-native';
 import { useMLModel } from '../../hooks/useMLModel.native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getScanImageUri } from '../../services/scanStore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -17,7 +18,7 @@ import Animated, {
 
 const { width } = Dimensions.get('window');
 
-// Labels sorted as per model training
+// Labels sorted as per model training (must match BREED_LABELS in register-animal.tsx)
 const LABELS = [
     'brown_swiss_cow',
     'dorper_sheep',
@@ -32,8 +33,26 @@ const LABELS = [
     'large_white_pig',
     'merino_sheep',
     'pietrain_pig',
-    'sahiwal_cow'
-];
+    'sahiwal_cow',
+] as const;
+
+// Maps model label → AnimalSpecies + AnimalType (same as in register-animal.tsx)
+const LABEL_MAP: Record<string, { species: string; type: string; displayLabel: string }> = {
+    brown_swiss_cow:       { type: 'COW',   species: 'BROWN_SWISS_COW',  displayLabel: 'Brown Swiss Cow'  },
+    dorper_sheep:          { type: 'SHEEP', species: 'MERINO_SHEEP',      displayLabel: 'Dorper Sheep'     },
+    duroc_pig:             { type: 'PIG',   species: 'DUROC_PIG',         displayLabel: 'Duroc Pig'        },
+    fresian_cow:           { type: 'COW',   species: 'FREISIAN_COW',      displayLabel: 'Friesian Cow'     },
+    girolando_cow:         { type: 'COW',   species: 'GIROLANDO_COW',     displayLabel: 'Girolando Cow'    },
+    indigenous_ankole_cow: { type: 'COW',   species: 'ANKOLE_COW',        displayLabel: 'Ankole Cow'       },
+    indigenous_goat:       { type: 'GOAT',  species: 'LOCAL_GOAT',        displayLabel: 'Local Goat'       },
+    indigenous_pig:        { type: 'PIG',   species: 'DUROC_PIG',         displayLabel: 'Indigenous Pig'   },
+    jersey_cow:            { type: 'COW',   species: 'JERSEY_COW',        displayLabel: 'Jersey Cow'       },
+    landrace_pig:          { type: 'PIG',   species: 'LARGE_WHITE_PIG',   displayLabel: 'Landrace Pig'     },
+    large_white_pig:       { type: 'PIG',   species: 'LARGE_WHITE_PIG',   displayLabel: 'Large White Pig'  },
+    merino_sheep:          { type: 'SHEEP', species: 'MERINO_SHEEP',      displayLabel: 'Merino Sheep'     },
+    pietrain_pig:          { type: 'PIG',   species: 'LARGE_WHITE_PIG',   displayLabel: 'Pietrain Pig'     },
+    sahiwal_cow:           { type: 'COW',   species: 'HOLSTEIN_COW',      displayLabel: 'Sahiwal Cow'      },
+};
 
 const GlassBadge = ({ children, style }: { children: React.ReactNode, style?: any }) => (
     <View style={[styles.glassBadge, style]}>
@@ -47,8 +66,9 @@ const MODEL_ASSET = require('../../assets/models/livestock_mobile_vnet_final.tfl
 
 export default function AnalysisScreen() {
     const router = useRouter();
-    const { image, autoStart } = useLocalSearchParams();
-    const imageUri = Array.isArray(image) ? image[0] : image;
+    const { autoStart } = useLocalSearchParams();
+    // Use scanStore to avoid expo-router double-encoding file:// URIs
+    const imageUri = getScanImageUri() ?? undefined;
     const autoStartParam = Array.isArray(autoStart) ? autoStart[0] : autoStart;
     const [status, setStatus] = useState('Initializing AI...');
     const [progressText, setProgressText] = useState('0');
@@ -124,33 +144,46 @@ export default function AnalysisScreen() {
             console.log('📊 Breed inference debug:', JSON.stringify(inferDebug));
 
             if (!logits || logits.length === 0) {
-                throw new Error('Invalid inference result: empty logits array');
+                throw new Error('Invalid inference result: empty output');
             }
 
-            // Find max probability with a for-loop (Math.max(...spread) crashes for large arrays)
-            let maxValue = -Infinity;
-            let maxIndex = 0;
-            for (let i = 0; i < logits.length; i++) {
-                if (logits[i] > maxValue) { maxValue = logits[i]; maxIndex = i; }
+            console.log(`[Analysis] Output dim: ${logits.length}, expected: ${LABELS.length}`);
+            if (logits.length !== LABELS.length) {
+                console.warn(`[Analysis] ⚠️ Dim mismatch — model gave ${logits.length}, expected ${LABELS.length}. Using best-effort argmax.`);
             }
 
-            // Convert to confidence percentage
-            const confidence = Math.min(100, Math.max(0, maxValue * 100));
-            
-            const breedName = LABELS[maxIndex].split('_').map(w => 
-                w.charAt(0).toUpperCase() + w.slice(1)
-            ).join(' ');
-            
-            console.log(`🐄 Predicted breed index: ${maxIndex} (${confidence.toFixed(1)}% confidence)`);
-            console.log('🎯 Real TFLite Result:', breedName, confidence.toFixed(1) + '%');
+            // Softmax → proper probability (works for any output dim)
+            let maxLogit = -Infinity;
+            for (let i = 0; i < logits.length; i++) if (logits[i] > maxLogit) maxLogit = logits[i];
+            const exps = Array.from(logits).map(l => Math.exp(l - maxLogit));
+            const sumExp = exps.reduce((a, b) => a + b, 0);
+            let maxProb = -Infinity, maxIndex = 0;
+            for (let i = 0; i < exps.length; i++) {
+                const p = exps[i] / sumExp;
+                if (p > maxProb) { maxProb = p; maxIndex = i; }
+            }
+
+            const rawLabel: string | undefined = LABELS[maxIndex as number];
+            const mapped = rawLabel ? LABEL_MAP[rawLabel] : undefined;
+            const breedName = mapped?.displayLabel
+                ?? (rawLabel ? rawLabel.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : `Class ${maxIndex}`)
+            const confidence = Math.round(maxProb * 100);
+
+            console.log(`🐄 Top label: ${rawLabel} → ${breedName} (${confidence}% confidence)`);
             setStatus('Classification Complete!');
             progress.value = withTiming(1, { duration: 500 });
             setProgressText('100');
 
             setTimeout(() => {
+                // image URI is already in scanStore — no need to pass it as a param
                 router.replace({
                     pathname: '/scanning/result',
-                    params: { breed: breedName, confidence, image: imageUri }
+                    params: {
+                        breed: breedName,
+                        confidence,
+                        animalType: mapped?.type ?? '',
+                        species: mapped?.species ?? '',
+                    }
                 } as any);
             }, 1000);
 
@@ -164,11 +197,11 @@ export default function AnalysisScreen() {
         }
     };
 
-    // Redirect if no image after a tick (params can be empty on first paint)
+    // Redirect if no image in store after a tick
     useEffect(() => {
         const t = setTimeout(() => {
-            if (!imageUri || typeof imageUri !== 'string' || imageUri.length === 0) {
-                console.warn('No image param on analysis screen – redirecting back');
+            if (!imageUri) {
+                console.warn('No image in scanStore on analysis screen – redirecting back');
                 router.replace('/(tabs)/breed-camera' as any);
             }
         }, 100);
@@ -243,9 +276,10 @@ export default function AnalysisScreen() {
                     <View style={[styles.corner, styles.cornerBR]} />
 
                     <Image
-                        source={{ uri: imageUri || 'https://images.unsplash.com/photo-1546445317-29f4545e9d53?q=80&w=1000&auto=format&fit=crop' }}
+                        source={imageUri ? { uri: imageUri } : undefined}
                         style={styles.mainImage}
                         contentFit="cover"
+                        cachePolicy="none"
                     />
 
                     {/* Animated Laser Scan Line */}
@@ -289,9 +323,10 @@ export default function AnalysisScreen() {
                 <View style={{ flexDirection: 'row', marginTop: 20, gap: 10 }}>
                     <TouchableOpacity
                         onPress={() => {
+                            // image URI is in scanStore — no need to pass as param
                             router.replace({
                                 pathname: '/scanning/result',
-                                params: { breed: 'Sahiwal Cow (Debug)', confidence: 99, image }
+                                params: { breed: 'Sahiwal Cow (Debug)', confidence: 99 }
                             } as any);
                         }}
                         style={{ padding: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8 }}

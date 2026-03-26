@@ -69,10 +69,10 @@ export default function Messages() {
         },
     ];
 
-    const handlePress = (id: string, name: string, avatar: string) => {
+    const handlePress = (id: string, name: string, avatar: string, isMatch: boolean) => {
         router.push({
             pathname: `/conversation/[id]`,
-            params: { id, name, avatar }
+            params: { id, name, avatar, isMatch: isMatch ? 'true' : 'false' }
         } as any);
     };
 
@@ -92,7 +92,7 @@ export default function Messages() {
             <View style={[styles.glowBottom, { opacity: isDark ? 1 : 0.2 }]} />
 
             <View style={[styles.header, { borderBottomColor: colors.glassBorder }]}>
-                <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: colors.glassBackground }]}>
+                <TouchableOpacity onPress={() => router.navigate('/(tabs)/home' as any)} style={[styles.iconButton, { backgroundColor: colors.glassBackground }]}>
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>{t('messages.header', 'Messages')}</Text>
@@ -117,7 +117,7 @@ export default function Messages() {
                     <MessageItem
                         key={item.id}
                         {...item}
-                        onPress={() => handlePress(item.id, item.name, item.avatar)}
+                        onPress={() => handlePress(item.id, item.name, item.avatar, item.isMatch ?? false)}
                     />
                 ))}
             </ScrollView>

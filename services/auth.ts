@@ -51,9 +51,12 @@ export interface User {
  */
 export const isOnline = async (): Promise<boolean> => {
   try {
+    // Use a lightweight public-ish endpoint. A 401 still means the server is up.
     const response = await api.get('/auth/loggedIn', { timeout: 5000 });
     return response.status === 200;
-  } catch (error) {
+  } catch (error: any) {
+    // 401 = server is reachable but token invalid — still counts as "online"
+    if (error?.response?.status === 401) return true;
     return false;
   }
 };
@@ -66,35 +69,28 @@ export const signup = async (data: SignupData): Promise<{
   success: boolean;
   message?: string;
   user?: User;
+  token?: string;
 }> => {
   try {
-    // Get location (permission was already requested on the signup screen,
-    // but getCurrentLocation will try once more as a fallback)
+    // Get location — optional, proceed without it if unavailable
     const location = await getCurrentLocation();
 
-    if (!location) {
-      return {
-        success: false,
-        message: 'Could not retrieve your location. Please enable location access and try again.',
-      };
-    }
-
-    // Send signup request with location and lastActive
+    // Send signup request (lat/lon omitted if location unavailable)
     const response = await api.post('/auth/signup', {
       ...data,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      lastActive: new Date().toISOString(), // Current timestamp
+      ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
+      lastActive: new Date().toISOString(),
     });
 
     if (response.data) {
-      // Extract and store the access token
-      const { access_token } = response.data;
-      if (access_token) {
-        await storeAuthToken(access_token);
+      // Backend signup returns { message: "Successful SignUp", token: '...' } in body
+      // and also sets it as the 'user_token' cookie (both paths covered below).
+      const jwt: string | undefined = response.data.token || response.data.access_token;
+      if (jwt) {
+        await storeAuthToken(jwt);
         console.log('✅ Signup successful - Token stored');
       } else {
-        console.warn('⚠️ No access_token in signup response');
+        console.warn('⚠️ No token in signup response');
       }
       
       // Fetch user data
@@ -107,6 +103,7 @@ export const signup = async (data: SignupData): Promise<{
           success: true,
           message: response.data.message,
           user: userResponse.data,
+          token: jwt,
         };
       }
     }
@@ -142,21 +139,46 @@ export const login = async (data: LoginData): Promise<{
   success: boolean;
   message?: string;
   user?: User;
+  token?: string;
 }> => {
   try {
     const response = await api.post('/auth/login', data);
 
     if (response.data) {
-      // Extract and store the access token
-      const { access_token } = response.data;
-      if (access_token) {
-        await storeAuthToken(access_token);
-        console.log('✅ Login successful - Token stored');
-      } else {
-        console.warn('⚠️ No access_token in login response');
+      // Try every possible location the JWT might appear in the login response.
+
+      // 1. Response body (most reliable on React Native)
+      let jwt: string | undefined =
+        response.data.token ||
+        response.data.access_token ||
+        response.data.jwt;
+
+      // 2. Set-Cookie header — often accessible in React Native's native HTTP stack
+      if (!jwt) {
+        const setCookieHeader = response.headers['set-cookie'];
+        if (setCookieHeader) {
+          const cookieStr = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+          const match = cookieStr?.match?.(/user_token=([^;]+)/);
+          if (match) jwt = match[1];
+        }
       }
-      
-      // Fetch user data
+
+      // 3. x-access-token / authorization response header
+      if (!jwt) {
+        const xat = response.headers['x-access-token'];
+        const authHeader = response.headers['authorization'];
+        jwt = xat || (authHeader ? String(authHeader).replace('Bearer ', '') : undefined);
+      }
+
+      if (jwt) {
+        await storeAuthToken(jwt);
+        console.log('✅ Login successful - JWT stored in SecureStore');
+      } else {
+        console.warn('⚠️ No JWT found in login response — session relies on cookie only (will not persist across app restarts)');
+      }
+
+      // Fetch user profile; the cookie set by /auth/login is sent automatically
+      // because withCredentials: true is set on the api instance.
       const userResponse = await api.get<User>('/auth/loggedIn');
       if (userResponse.data) {
         await storeUserData(userResponse.data);
@@ -166,6 +188,7 @@ export const login = async (data: LoginData): Promise<{
           success: true,
           message: response.data.message,
           user: userResponse.data,
+          token: jwt,
         };
       }
     }
@@ -241,11 +264,12 @@ export const loginWithBiometric = async (): Promise<{
           return { success: true };
         }
       } catch (error) {
-        // Cookie invalid or expired - clear data and require online login
-        await clearAuthData();
+        // Server unreachable or session invalid — do NOT wipe stored credentials.
+        // The server may just be restarting (Render free-tier). The stored token
+        // and user data stay intact so the user remains "logged in" locally.
         return {
           success: false,
-          message: 'Session expired. Please login again.',
+          message: 'Unable to verify session with server. Please log in manually.',
           requiresOnlineLogin: true,
         };
       }

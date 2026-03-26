@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
+import { setScanImageUri } from '../../services/scanStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ export default function BreedCamera() {
     const [permission, requestPermission] = useCameraPermissions();
     const [isScanning, setIsScanning] = useState(true);
     const [selectedSpecies, setSelectedSpecies] = useState('Goat');
+    const [lastImagePath, setLastImagePath] = useState<string | null>(null);
     const cameraRef = useRef<any>(null);
 
     // Animation values
@@ -107,11 +109,13 @@ export default function BreedCamera() {
                 );
                 const scanImagePath = FileSystem.documentDirectory + 'scan-image.jpg';
                 await FileSystem.copyAsync({ from: compressed.uri, to: scanImagePath });
+                setLastImagePath(scanImagePath);
+                setScanImageUri(scanImagePath);
 
                 console.log('🚀 Navigating with captured photo');
                 router.push({
                     pathname: '/scanning/analysis',
-                    params: { image: scanImagePath, autoStart: 'true' }
+                    params: { autoStart: 'true' }
                 } as any);
             } else {
                 console.error('❌ Failed to capture photo');
@@ -152,11 +156,13 @@ export default function BreedCamera() {
             // Copy to app documentDirectory so URI is stable and short (avoids param truncation / content:// issues)
             const scanImagePath = FileSystem.documentDirectory + 'scan-image.jpg';
             await FileSystem.copyAsync({ from: compressed.uri, to: scanImagePath });
+            setLastImagePath(scanImagePath);
+            setScanImageUri(scanImagePath);
 
-            console.log('🚀 Navigating with stable file URI');
+            console.log('🚀 Navigating with stable file URI (stored in scanStore)');
             router.push({
                 pathname: '/scanning/analysis',
-                params: { image: scanImagePath, autoStart: 'true' }
+                params: { autoStart: 'true' }
             } as any);
         } catch (error) {
             console.error('❌ Image picker error:', error);
@@ -175,7 +181,7 @@ export default function BreedCamera() {
             {/* Top Status Bar Area */}
             <View style={styles.topBar}>
                 <View style={styles.topBarLeft}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+                    <TouchableOpacity onPress={() => router.navigate('/(tabs)/home' as any)} style={styles.iconButton}>
                         <MaterialIcons name="arrow-back-ios-new" size={20} color="rgba(255,255,255,0.9)" />
                     </TouchableOpacity>
 
@@ -202,7 +208,7 @@ export default function BreedCamera() {
                                 params: {
                                     breed: 'Sahiwal Cow (Bypassed)',
                                     confidence: 99,
-                                    image: 'https://images.unsplash.com/photo-1546445317-29f4545e9d53?q=80&w=1000&auto=format&fit=crop'
+                                    image: lastImagePath ?? ''
                                 }
                             } as any);
                         }}
@@ -268,10 +274,15 @@ export default function BreedCamera() {
                 <View style={styles.actionRow}>
                     {/* Gallery Preview */}
                     <TouchableOpacity style={styles.galleryPreview} onPress={pickImage}>
-                        <Image
-                            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuABpGd8_TkoKXqsqOt_psubeT1jsCR8B-ziz-WTpR9qCuB-8dTkpy84UmVdO8DyNTz08faFm8Fdgm1re7OOXCiCkZ_GJxzi51w4GRQIggWf6LKksJe3SR3rr7bhbwIOQd-p8D0291fblNFGXFHa2Boe_UavBOpli_1O4Cb0fdmfqsABBnC5LV1qtWSd14WrHqtfRUe1ofaliu6sTrQftVIebVkyki62PWNYg-MaWf40gOLA15j-zI9ZTc2i0YGfifMpp6JQoxVln7o' }}
-                            style={styles.galleryImage}
-                        />
+                        {lastImagePath ? (
+                            <Image
+                                source={{ uri: lastImagePath }}
+                                style={styles.galleryImage}
+                                cachePolicy="none"
+                            />
+                        ) : (
+                            <MaterialIcons name="photo-library" size={28} color="rgba(255,255,255,0.6)" style={{ alignSelf: 'center', marginTop: 14 }} />
+                        )}
                     </TouchableOpacity>
 
                     {/* Shutter Button */}

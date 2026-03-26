@@ -11,7 +11,6 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
 
@@ -29,64 +28,85 @@ const Glass = ({ children, style }: { children: React.ReactNode; style?: any }) 
     <View style={[styles.glass, style]}>{children}</View>
 );
 
-// Simple polyline-style productivity chart using SVG
+// Simple bar chart using pure React Native Views
 const ProductivityChart = () => {
-    const chartW = width - 80; // width inside the card
+    const monthData = [
+        { month: 'Jan', value: 65 },
+        { month: 'Feb', value: 70 },
+        { month: 'Mar', value: 85 },
+        { month: 'Apr', value: 75 },
+        { month: 'Mar', value: 90 },
+        { month: 'Jun', value: 95 },
+    ];
     const chartH = 100;
 
     return (
-        <View style={{ height: chartH + 20, width: '100%' }}>
-            <Svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`}>
-                <Defs>
-                    <LinearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <Stop offset="0%" stopColor={EMERALD} stopOpacity={0.2} />
-                        <Stop offset="100%" stopColor={EMERALD} stopOpacity={1} />
-                    </LinearGradient>
-                </Defs>
-                {/* Approximate the HTML path scaled to chartW */}
-                <Path
-                    d={`M0,${chartH * 0.8} Q${chartW * 0.125},${chartH * 0.75} ${chartW * 0.2},${chartH * 0.6} T${chartW * 0.4},${chartH * 0.5} T${chartW * 0.6},${chartH * 0.7} T${chartW * 0.8},${chartH * 0.3} T${chartW},${chartH * 0.2}`}
-                    fill="none"
-                    stroke="url(#emeraldGrad)"
-                    strokeWidth={3}
-                    strokeLinecap="round"
-                />
-            </Svg>
+        <View style={{ height: chartH + 30, width: '100%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: chartH, paddingHorizontal: 10 }}>
+                {monthData.map((item, idx) => {
+                    const barHeight = (item.value / 100) * chartH;
+                    const opacity = 0.4 + (idx / monthData.length) * 0.6; // Gradient effect
+                    return (
+                        <View key={item.month} style={{ alignItems: 'center', flex: 1 }}>
+                            <View style={{
+                                width: 24,
+                                height: barHeight,
+                                backgroundColor: EMERALD,
+                                opacity,
+                                borderRadius: 6,
+                                marginBottom: 4,
+                            }} />
+                        </View>
+                    );
+                })}
+            </View>
             {/* Month labels */}
             <View style={styles.chartLabels}>
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((m) => (
-                    <Text key={m} style={styles.chartLabel}>{m}</Text>
+                {monthData.map((item) => (
+                    <Text key={item.month} style={styles.chartLabel}>{item.month}</Text>
                 ))}
             </View>
         </View>
     );
 };
 
-// Circular health score gauge
+// Circular health score gauge using pure React Native Views
 const HealthGauge = ({ score }: { score: number }) => {
     const size = 88;
-    const r = 36;
-    const circumference = 2 * Math.PI * r;
-    const offset = circumference * (1 - score / 100);
-    const cx = size / 2;
-    const cy = size / 2;
-
+    const ringThickness = 8;
+    const radius = (size - ringThickness) / 2;
+    
+    // Calculate the angle for the progress arc (in degrees)
+    const progressAngle = (score / 100) * 360;
+    
     return (
-        <View style={{ width: size, height: size, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
-            <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-                {/* Track */}
-                <Circle cx={cx} cy={cy} r={r} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth={8} />
-                {/* Progress */}
-                <Circle
-                    cx={cx} cy={cy} r={r}
-                    fill="transparent"
-                    stroke={EMERALD}
-                    strokeWidth={8}
-                    strokeDasharray={circumference}
-                    strokeDashoffset={offset}
-                    strokeLinecap="round"
-                />
-            </Svg>
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            {/* Background ring */}
+            <View style={{
+                position: 'absolute',
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                borderWidth: ringThickness,
+                borderColor: 'rgba(255,255,255,0.05)',
+            }} />
+            
+            {/* Progress ring - using multiple segments for smooth appearance */}
+            <View style={{
+                position: 'absolute',
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                borderWidth: ringThickness,
+                borderColor: 'transparent',
+                borderTopColor: EMERALD,
+                borderRightColor: progressAngle > 90 ? EMERALD : 'transparent',
+                borderBottomColor: progressAngle > 180 ? EMERALD : 'transparent',
+                borderLeftColor: progressAngle > 270 ? EMERALD : 'transparent',
+                transform: [{ rotate: '-90deg' }],
+            }} />
+            
+            {/* Inner circle content */}
             <View style={styles.gaugeCenter}>
                 <Text style={styles.gaugeScore}>{score}</Text>
                 <Text style={styles.gaugeLabel}>Health</Text>
@@ -107,7 +127,7 @@ export default function AnimalPerformance() {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => router.navigate('/(tabs)/animal-profile' as any)}>
                     <MaterialIcons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Animal Performance</Text>
@@ -323,7 +343,6 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.0)',
         // Simulated gradient: bottom dark
-        background: undefined,
     },
     heroInfo: {
         position: 'absolute',

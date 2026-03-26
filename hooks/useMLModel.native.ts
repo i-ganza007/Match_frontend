@@ -1,13 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Skia, ColorType, AlphaType } from '@shopify/react-native-skia';
-import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { BUNDLE_VERSION } from '../constants/bundleVersion';
 
 export { BUNDLE_VERSION };
 console.log('[BUNDLE] ✅ useMLModel loaded — bundle: ' + BUNDLE_VERSION);
 
-type TFModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
+// Safe dynamic imports — prevents module-level crash when native modules
+// are unavailable (Expo Go, old dev client, missing native build).
+let _loadTensorflowModel: ((source: any) => Promise<any>) | null = null;
+let _Skia: any = null;
+let _ColorType: any = null;
+let _AlphaType: any = null;
+
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _loadTensorflowModel = (require('react-native-fast-tflite') as any).loadTensorflowModel;
+} catch (e) {
+    console.warn('[MLModel] react-native-fast-tflite not available – breed detection disabled:', e);
+}
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const skia = require('@shopify/react-native-skia') as any;
+    _Skia = skia.Skia;
+    _ColorType = skia.ColorType;
+    _AlphaType = skia.AlphaType;
+} catch (e) {
+    console.warn('[MLModel] @shopify/react-native-skia not available – breed detection disabled:', e);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type TFModel = any;
 
 export interface InferenceDebugInfo {
   inputMin: number;
@@ -29,6 +51,8 @@ const HW   = SIZE * SIZE;
 
 // ─── Shared: resize + read raw RGBA pixels via Skia ──────────────────────────
 const getPixels = async (imageUri: string): Promise<Uint8Array> => {
+  if (!_Skia) throw new Error('Skia not available – cannot decode image');
+
   const manipulated = await ImageManipulator.manipulateAsync(
     imageUri,
     [{ resize: { width: SIZE, height: SIZE } }],
@@ -36,14 +60,14 @@ const getPixels = async (imageUri: string): Promise<Uint8Array> => {
   );
   await new Promise(r => setTimeout(r, 0));
 
-  const skData  = await (Skia.Data as any).fromURI(manipulated.uri);
-  const skImage = Skia.Image.MakeImageFromEncoded(skData);
+  const skData  = await (_Skia.Data as any).fromURI(manipulated.uri);
+  const skImage = _Skia.Image.MakeImageFromEncoded(skData);
   if (!skImage) throw new Error('Skia: could not decode image');
 
   const pixels = skImage.readPixels(0, 0, {
     width: SIZE, height: SIZE,
-    colorType: ColorType.RGBA_8888,
-    alphaType: AlphaType.Opaque,
+    colorType: _ColorType.RGBA_8888,
+    alphaType: _AlphaType.Opaque,
   }) as Uint8Array;
   skImage.dispose();
 
@@ -97,9 +121,13 @@ export const useMLModel = (modelRequire: any, options?: { preferAsync?: boolean 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!_loadTensorflowModel) {
+        if (!cancelled) setPreparationError('react-native-fast-tflite not available – rebuild the app with native modules');
+        return;
+      }
       try {
         console.log('[MODEL] Loading TFLite...');
-        const model = await loadTensorflowModel(modelRequire);
+        const model = await _loadTensorflowModel(modelRequire);
 
         const inShapes  = model.inputs.map(t  => `[${t.dataType}:${t.shape}]`).join(', ');
         const outShapes = model.outputs.map(t => `[${t.dataType}:${t.shape}]`).join(', ');

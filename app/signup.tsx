@@ -8,12 +8,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { signup, SignupData } from '../services/auth';
 import { requestLocationPermission, hasLocationPermission } from '../services/location';
 import { BUNDLE_VERSION } from '../constants/bundleVersion';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function SignupScreen() {
     const { t } = useTranslation();
     const router = useRouter();
+    const { signIn } = useAuth();
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
@@ -80,27 +82,6 @@ export default function SignupScreen() {
             return;
         }
 
-        // Guard: if permission still not granted, re-request before the API call
-        if (!locationGranted) {
-            const result = await requestLocationPermission();
-            if (!result.granted) {
-                if (!result.canAskAgain) {
-                    Alert.alert(
-                        'Location Required',
-                        'Please enable location access for Match in your device Settings and try again.',
-                        [
-                            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                            { text: 'Cancel', style: 'cancel' },
-                        ],
-                    );
-                } else {
-                    Alert.alert('Location Required', 'Please allow location access to sign up.');
-                }
-                return;
-            }
-            setLocationGranted(true);
-        }
-
         setLoading(true);
 
         const signupData: SignupData = {
@@ -119,10 +100,11 @@ export default function SignupScreen() {
 
         setLoading(false);
 
-        if (result.success) {
-            // Show success notification and redirect to home
+        if (result.success && result.user) {
+            // Update AuthContext in-memory state so RouteGuard won't kick to login
+            await signIn(result.token ?? null, result.user);
             Alert.alert(
-                '🎉 Welcome!', 
+                '🎉 Welcome!',
                 'Account created successfully!',
                 [{ text: 'Continue', onPress: () => router.replace('/(tabs)/home') }],
                 { cancelable: false }
@@ -323,6 +305,16 @@ export default function SignupScreen() {
                         ) : (
                             <Text style={styles.createAccountText}>{t('signup.createAccount', 'Create Account')}</Text>
                         )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ alignItems: 'center', marginBottom: 12 }}
+                        onPress={() => router.replace('/login')}
+                    >
+                        <Text style={{ color: '#888', fontSize: 14 }}>
+                            Already have an account?{' '}
+                            <Text style={{ color: '#22C55E', fontWeight: 'bold' }}>Sign In</Text>
+                        </Text>
                     </TouchableOpacity>
 
                     {/* ── Debug stamp ── */}

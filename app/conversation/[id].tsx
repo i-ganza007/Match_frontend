@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,46 +7,84 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GlassView } from '../../components/GlassView';
 import { ChatBubble } from '../../components/ChatBubble';
 import { ChatInput } from '../../components/ChatInput';
+import { getSingleUser, User } from '../../services/users';
+import { useSocket, IncomingMessage } from '../../services/useSocket';
 
 import { useTheme } from '../../context/ThemeContext';
+
+type Message = {
+    id: string;
+    text: string;
+    isMe: boolean;
+    time: string;
+    read?: boolean;
+    image?: string;
+};
 
 export default function ConversationScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { id, name, avatar } = params;
+    const { id, name, avatar, isMatch } = params;
+    const canMessage = isMatch === 'true';
+
     const scrollViewRef = useRef<ScrollView>(null);
     const { colors, theme } = useTheme();
     const isDark = theme === 'dark';
 
-    // Mock data based on provided HTML
-    const messages = [
-        {
-            id: '1',
-            text: 'Muraho! I received your inquiry about the Jersey bull genetics.',
-            isMe: false,
-            time: '9:41 AM',
-        },
-        {
-            id: '2',
-            text: 'Yes, I am looking to improve milk yield for the next season. Is he available?',
-            isMe: true,
-            time: '9:45 AM',
-            read: true,
-        },
-        {
-            id: '3',
-            text: 'He is available. Here is his recent health certificate and profile.',
-            isMe: false,
-            time: '9:46 AM',
-            image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBNquQW5mLuXUAmbHg_VGLI2NTWh-PQD56BNJTxQOIprN2BL1OKpDfv8GlNVb4Qab4-IneE-a5I3dv7y65rZY0qCaWRoca5RTgsZizc-hMmz8cvAZ_4GYNFXX0wRiy_jJO5U6-YleAGIwO2e-Xsjc6lz9KKRU_cw_t1r4UnS8HF3WFAIo9HnjNlVd7Vygdv1LDNesgj-T5QYLI8Zifsf8P8czdo0UJXIO1wJe0Nu_B4TrfzOrJ2tBGIIpq_98eSgZEOR6Pn3CmkTO0',
-        },
-        {
-            id: '4',
-            text: 'Perfect. Can we meet to finalize?',
-            isMe: true,
-            time: '9:48 AM',
-        }
-    ];
+    const [partnerUser, setPartnerUser] = useState<User | null>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+
+    const { isConnected, sendMessage, onMessage } = useSocket();
+
+    useEffect(() => {
+        if (!id) return;
+        getSingleUser(id as string)
+            .then(setPartnerUser)
+            .catch(() => { /* fall back to route params */ });
+    }, [id]);
+
+    // Listen for incoming messages from this conversation partner
+    useEffect(() => {
+        if (!canMessage) return;
+        const cleanup = onMessage((msg: IncomingMessage) => {
+            if (msg.from !== id) return; // ignore messages from other chats
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: Date.now().toString(),
+                    text: msg.message,
+                    isMe: false,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                },
+            ]);
+        });
+        return cleanup;
+    }, [id, canMessage, onMessage]);
+
+    // Auto-scroll to bottom when messages change
+    useEffect(() => {
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    }, [messages]);
+
+    const displayName   = partnerUser?.name   ?? (name as string)   ?? 'Farmer';
+    const displayAvatar = partnerUser?.profile_url ?? (avatar as string) ?? '';
+
+    async function handleSend(text: string) {
+        if (!text.trim() || !canMessage) return;
+
+        // Optimistic update
+        setMessages((prev) => [
+            ...prev,
+            {
+                id: Date.now().toString(),
+                text,
+                isMe: true,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+        ]);
+
+        await sendMessage(id as string, text);
+    }
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -69,15 +107,17 @@ export default function ConversationScreen() {
                     <View style={styles.headerProfile}>
                         <View>
                             <View style={styles.avatarWrapper}>
-                                <Image source={{ uri: (avatar as string) || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAHJ0AROg-JwtBI-y-7F6T_jNHjEtdWk_ekKZRZWKq90E-zGkYjnrbpMku4dlmtag9MutuPN19JnBIAVdXFL1tdj708nc35VujaLaMyf8txSdAgICcqTEJ8QUGAOMcpcgm2fhQn-LxQOpg9Og8gmYwzqIV3RukUUH2uWgm5lXqMxYdNVGwHu59Z7lE4Q1cN10SxAjRYsu8zF0wgT_6Mspy2xMBORNq2rlbFHYOwy32Ayo-XeC77s1_CkWba2eujyDMDDwiM10PHY8E' }} style={styles.avatar} />
+                                <Image source={{ uri: displayAvatar || undefined }} style={styles.avatar} />
                             </View>
                             <View style={[styles.miniIconBadge, { backgroundColor: colors.surface }]}>
                                 <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA36yzkoJYk1pxOPssbpWghdqDoMcHa3et43FOoCT8RAlIGl1XxvelF3E-2wH_GoP4Y8-tDix7B8sNisZO9ux2oL9rAfKy7VCyG9uhel9sFnL3o0x2k7K8Bn5AD1N-f3Vt1q2jJZ9833mVFq7k2TMiHz_Ac3O2NXnQAylV4In1G74gSpsftoHuAQsg-MEeoFKbR6JVIQPGdQOs8N_ptouQisSU2blXdEoAtzTKQHgMJ5AlKCWGYyKXPuXHlLQCQxbZ10Q1RQggsx5o' }} style={styles.miniIcon} contentFit="contain" />
                             </View>
                         </View>
                         <View style={styles.headerTextContainer}>
-                            <Text style={[styles.headerName, { color: colors.text }]}>{(name as string) || 'Jean-Paul (Breeder)'}</Text>
-                            <Text style={[styles.headerStatus, { color: isDark ? '#bbf7d0' : '#166534' }]}>Active now</Text>
+                            <Text style={[styles.headerName, { color: colors.text }]}>{displayName}</Text>
+                            <Text style={[styles.headerStatus, { color: isConnected ? (isDark ? '#bbf7d0' : '#166534') : colors.icon }]}>
+                                {isConnected ? 'Active now' : 'Connecting...'}
+                            </Text>
                         </View>
                     </View>
 
@@ -103,8 +143,8 @@ export default function ConversationScreen() {
                             key={msg.id}
                             message={msg.text}
                             isMe={msg.isMe}
-                            avatar={(avatar as string) || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAHJ0AROg-JwtBI-y-7F6T_jNHjEtdWk_ekKZRZWKq90E-zGkYjnrbpMku4dlmtag9MutuPN19JnBIAVdXFL1tdj708nc35VujaLaMyf8txSdAgICcqTEJ8QUGAOMcpcgm2fhQn-LxQOpg9Og8gmYwzqIV3RukUUH2uWgm5lXqMxYdNVGwHu59Z7lE4Q1cN10SxAjRYsu8zF0wgT_6Mspy2xMBORNq2rlbFHYOwy32Ayo-XeC77s1_CkWba2eujyDMDDwiM10PHY8E'}
-                            name={msg.isMe ? 'Me' : (name as string)?.split(' ')[0] || 'Jean-Paul'}
+                            avatar={displayAvatar || undefined}
+                            name={msg.isMe ? 'Me' : displayName.split(' ')[0]}
                             image={msg.image}
                             read={msg.read}
                             time={msg.time}
@@ -114,38 +154,49 @@ export default function ConversationScreen() {
 
                 {/* Bottom Areas */}
                 <View style={styles.footer}>
-                    {/* Quick Actions */}
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActions} style={styles.quickActionsContainer}>
-                        <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
-                            <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
-                                <MaterialIcons name="photo-camera" size={16} color="#11d41e" />
-                            </View>
-                            <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Photo</Text>
+                    {!canMessage ? (
+                        <GlassView style={styles.matchGate}>
+                            <MaterialIcons name="lock" size={20} color={colors.icon} />
+                            <Text style={[styles.matchGateText, { color: colors.icon }]}>
+                                Messaging is only available after a breed match is confirmed.
+                            </Text>
                         </GlassView>
-                        <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
-                            <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
-                                <MaterialIcons name="location-on" size={16} color="#11d41e" />
-                            </View>
-                            <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Location</Text>
-                        </GlassView>
-                        <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
-                            <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
-                                <MaterialIcons name="calendar-month" size={16} color="#11d41e" />
-                            </View>
-                            <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Meeting</Text>
-                        </GlassView>
-                        <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
-                            <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
-                                <MaterialIcons name="payments" size={16} color="#11d41e" />
-                            </View>
-                            <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Offer</Text>
-                        </GlassView>
-                    </ScrollView>
+                    ) : (
+                        <>
+                            {/* Quick Actions */}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActions} style={styles.quickActionsContainer}>
+                                <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
+                                    <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
+                                        <MaterialIcons name="photo-camera" size={16} color="#11d41e" />
+                                    </View>
+                                    <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Photo</Text>
+                                </GlassView>
+                                <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
+                                    <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
+                                        <MaterialIcons name="location-on" size={16} color="#11d41e" />
+                                    </View>
+                                    <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Location</Text>
+                                </GlassView>
+                                <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
+                                    <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
+                                        <MaterialIcons name="calendar-month" size={16} color="#11d41e" />
+                                    </View>
+                                    <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Meeting</Text>
+                                </GlassView>
+                                <GlassView style={[styles.actionButton, { backgroundColor: isDark ? 'rgba(16, 34, 17, 0.6)' : colors.glassBackground }]}>
+                                    <View style={[styles.actionIconBg, { backgroundColor: isDark ? 'rgba(17, 212, 30, 0.2)' : 'rgba(17, 212, 30, 0.1)' }]}>
+                                        <MaterialIcons name="payments" size={16} color="#11d41e" />
+                                    </View>
+                                    <Text style={[styles.actionText, { color: isDark ? '#d1d5db' : colors.text }]}>Offer</Text>
+                                </GlassView>
+                            </ScrollView>
 
-                    {/* Input */}
-                    <View style={styles.inputWrapper}>
-                        <ChatInput onSend={(text) => console.log('Sending:', text)} />
-                    </View>
+                            {/* Input */}
+                            <View style={styles.inputWrapper}>
+                                <ChatInput onSend={handleSend} />
+                            </View>
+                        </>
+                    )}
                 </View>
 
             </SafeAreaView>
@@ -279,7 +330,18 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '500',
     },
-    inputWrapper: {
-
-    }
+    inputWrapper: {},
+    matchGate: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 4,
+    },
+    matchGateText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+    },
 });
